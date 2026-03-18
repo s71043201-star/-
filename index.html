@@ -845,7 +845,7 @@ function downloadChart(btn) {
 
   // 尺寸設定（模擬網頁卡片樣式）
   const CARD_PAD = 26;
-  const TITLE_H  = 60;   // 標題區高度
+  const TITLE_H  = 80;   // 標題區高度
   const SEP_GAP  = 16;   // 分隔線下方間距
   const BAR_W    = 4;    // 左側豎線寬度
   const BAR_H    = 22;   // 左側豎線高度
@@ -876,7 +876,7 @@ function downloadChart(btn) {
 
   // 標題文字（黑色，跟網頁一樣）
   ctx.fillStyle = '#1a2e28';
-  ctx.font = 'bold 24px "Microsoft JhengHei", Arial, sans-serif';
+  ctx.font = 'bold 40px "Microsoft JhengHei", Arial, sans-serif';
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
   ctx.fillText(title, TEXT_X, TITLE_H / 2);
