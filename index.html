@@ -835,24 +835,43 @@ function showTab(name, btn){
 //  下載圖表為 JPG
 // ══════════════════════════════════════════════
 function downloadChart(btn) {
-  // 找到同一個 chart-section 裡的 canvas
   const section = btn.closest('.chart-section');
   const canvas = section.querySelector('canvas');
   if (!canvas) { alert('找不到圖表'); return; }
 
-  // 取得圖表標題作為檔名
   const h2 = section.querySelector('h2');
   const title = h2 ? h2.textContent.trim() : 'chart';
   const filename = title + '.jpg';
 
-  // 建立白底畫布（JPG 不支援透明）
+  // 計算含標題的畫布高度
+  const TITLE_H = 48;
+  const PADDING = 20;
   const tmpCanvas = document.createElement('canvas');
-  tmpCanvas.width  = canvas.width;
-  tmpCanvas.height = canvas.height;
+  tmpCanvas.width  = canvas.width + PADDING * 2;
+  tmpCanvas.height = canvas.height + TITLE_H + PADDING * 2;
   const ctx = tmpCanvas.getContext('2d');
+
+  // 白底
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, tmpCanvas.width, tmpCanvas.height);
-  ctx.drawImage(canvas, 0, 0);
+
+  // 頂部綠色漸層標題列
+  const grad = ctx.createLinearGradient(0, 0, tmpCanvas.width, 0);
+  grad.addColorStop(0, '#8fba2e');
+  grad.addColorStop(0.5, '#2aac8a');
+  grad.addColorStop(1, '#1a9fbe');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, tmpCanvas.width, TITLE_H);
+
+  // 標題文字
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 16px "Microsoft JhengHei", "Noto Sans TC", sans-serif';
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  ctx.fillText(title, PADDING + 6, TITLE_H / 2);
+
+  // 圖表本體
+  ctx.drawImage(canvas, PADDING, TITLE_H + PADDING);
 
   // 下載
   const link = document.createElement('a');
