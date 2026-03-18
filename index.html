@@ -3,86 +3,240 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>處方統計儀表板</title>
+<title>健康處方開立統計儀表板</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Microsoft JhengHei', 'Noto Sans TC', sans-serif; background: #f0f4f8; color: #2d3748; min-height: 100vh; }
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700;800&display=swap');
 
-/* ── 設定提示橫幅（設定好後自動隱藏） ── */
+:root {
+  --green-yellow: #8fba2e;
+  --teal:         #2aac8a;
+  --cyan:         #1a9fbe;
+  --blue-teal:    #1a7ea0;
+  --grad-main:    linear-gradient(135deg, #8fba2e 0%, #2aac8a 50%, #1a9fbe 100%);
+  --grad-card-1:  linear-gradient(135deg, #8fba2e, #5faa60);
+  --grad-card-2:  linear-gradient(135deg, #2aac8a, #1a9fbe);
+  --grad-card-3:  linear-gradient(135deg, #e8930a, #f5c03a);
+  --grad-card-4:  linear-gradient(135deg, #1a7ea0, #2aac8a);
+  --bg:           #f2f8f5;
+  --surface:      #ffffff;
+  --border:       #d6ede5;
+  --text:         #1a2e28;
+  --text-muted:   #5a7a70;
+  --shadow-sm:    0 1px 4px rgba(26,120,90,0.08);
+  --shadow-md:    0 4px 18px rgba(26,120,90,0.12);
+  --shadow-lg:    0 8px 36px rgba(26,120,90,0.16);
+  --radius:       14px;
+  --radius-sm:    8px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+  background: var(--bg); color: var(--text); min-height: 100vh;
+  background-image:
+    radial-gradient(ellipse at 10% 0%, rgba(143,186,46,0.10) 0%, transparent 55%),
+    radial-gradient(ellipse at 90% 100%, rgba(26,159,190,0.10) 0%, transparent 55%);
+}
+
+/* ── 設定提示 ── */
 #setup-banner {
   background: #fffbeb; border-bottom: 3px solid #f6c90e;
-  padding: 14px 32px; font-size: 0.85rem; color: #7d6608; line-height: 1.7;
+  padding: 14px 36px; font-size: 0.85rem; color: #7d6608; line-height: 1.7;
 }
-#setup-banner strong { color: #533f03; font-size: 0.9rem; }
-#setup-banner code { background: #fff; border: 1px solid #e2c200; border-radius: 4px; padding: 1px 7px; font-size: 0.82rem; color: #533f03; }
+#setup-banner strong { color: #533f03; }
+#setup-banner code { background: #fff; border: 1px solid #e2c200; border-radius: 4px; padding: 1px 7px; font-size: 0.82rem; }
 #setup-banner.hidden { display: none; }
 
-header { background: linear-gradient(135deg, #2b6cb0, #2c7a7b); color: white; padding: 22px 32px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
-header h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: 0.05em; }
-header p  { font-size: 0.88rem; opacity: 0.85; margin-top: 4px; }
+/* ── Header ── */
+header {
+  background: var(--grad-main);
+  color: white; padding: 26px 36px;
+  box-shadow: 0 4px 24px rgba(26,120,90,0.25);
+  position: relative; overflow: hidden;
+}
+header::before {
+  content: ''; position: absolute; top: -50px; right: -30px;
+  width: 220px; height: 220px; border-radius: 50%;
+  background: rgba(255,255,255,0.07);
+}
+header::after {
+  content: ''; position: absolute; bottom: -70px; right: 150px;
+  width: 160px; height: 160px; border-radius: 50%;
+  background: rgba(255,255,255,0.05);
+}
+header h1 {
+  font-size: 1.6rem; font-weight: 800; letter-spacing: 0.05em;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.15);
+}
+header p { font-size: 0.86rem; opacity: 0.88; margin-top: 5px; letter-spacing: 0.01em; }
 
 /* ── 雲端狀態列 ── */
 #cloud-bar {
-  padding: 7px 32px; font-size: 0.8rem; display: flex; align-items: center; gap: 8px;
-  background: #f0fff4; border-bottom: 1px solid #c6f6d5; color: #276749;
+  padding: 8px 36px; font-size: 0.8rem; display: flex; align-items: center; gap: 10px;
+  background: #e8f8f2; border-bottom: 1px solid #b3e8d4; color: #1a6e50;
+  font-weight: 500;
 }
-#cloud-bar.loading { background: #ebf8ff; border-color: #bee3f8; color: #2c5282; }
-#cloud-bar.error   { background: #fff5f5; border-color: #fed7d7; color: #c53030; }
-#cloud-bar .dot { width: 8px; height: 8px; border-radius: 50%; background: #38a169; flex-shrink: 0; }
-#cloud-bar.loading .dot { background: #3182ce; animation: blink 1s infinite; }
-#cloud-bar.error .dot   { background: #e53e3e; }
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+#cloud-bar.loading { background: #e6f5fa; border-color: #a8dff0; color: #1a6880; }
+#cloud-bar.error   { background: #fef2f2; border-color: #fccfcf; color: #b91c1c; }
+#cloud-bar .dot {
+  width: 9px; height: 9px; border-radius: 50%; background: var(--teal); flex-shrink: 0;
+  box-shadow: 0 0 0 3px rgba(42,172,138,0.25);
+}
+#cloud-bar.loading .dot { background: var(--cyan); box-shadow: 0 0 0 3px rgba(26,159,190,0.25); animation: blink 1.2s infinite; }
+#cloud-bar.error .dot   { background: #e53e3e; box-shadow: 0 0 0 3px rgba(229,62,62,0.2); }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
 
-.upload-bar { background: white; border-bottom: 2px solid #ebf8ff; padding: 14px 32px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-.upload-bar label { font-size: 0.88rem; font-weight: 700; color: #2b6cb0; white-space: nowrap; }
-.upload-drop { flex: 1; min-width: 240px; border: 2px dashed #90cdf4; border-radius: 10px; padding: 10px 20px; text-align: center; cursor: pointer; transition: all 0.2s; background: #ebf8ff; font-size: 0.85rem; color: #2c5282; position: relative; }
-.upload-drop:hover, .upload-drop.drag-over { border-color: #3182ce; background: #bee3f8; }
+/* ── 上傳區 ── */
+.upload-bar {
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  padding: 13px 36px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  box-shadow: var(--shadow-sm);
+}
+.upload-bar label { font-size: 0.87rem; font-weight: 700; color: var(--teal); white-space: nowrap; }
+.upload-drop {
+  flex: 1; min-width: 240px; border: 2px dashed #7dd4b8; border-radius: var(--radius-sm);
+  padding: 10px 20px; text-align: center; cursor: pointer; transition: all 0.2s;
+  background: #f0fbf7; font-size: 0.84rem; color: #1a7a60; position: relative;
+}
+.upload-drop:hover, .upload-drop.drag-over { border-color: var(--teal); background: #d4f5ea; }
 .upload-drop input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
-.upload-status { font-size: 0.82rem; color: #38a169; font-weight: 600; max-width: 400px; }
-.upload-status.error { color: #e53e3e; }
-.upload-hint { font-size: 0.78rem; color: #718096; }
+.upload-status { font-size: 0.81rem; color: var(--teal); font-weight: 600; max-width: 420px; }
+.upload-status.error { color: #c53030; }
+.upload-hint { font-size: 0.77rem; color: var(--text-muted); }
 
-.summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; padding: 24px 32px 8px; }
-.card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 6px rgba(0,0,0,0.08); text-align: center; border-top: 4px solid; }
-.card.blue   { border-color: #3182ce; } .card.green  { border-color: #38a169; }
-.card.orange { border-color: #dd6b20; } .card.purple { border-color: #805ad5; }
-.card .val { font-size: 2.2rem; font-weight: 800; line-height: 1; }
-.card.blue .val { color: #3182ce; } .card.green .val { color: #38a169; }
-.card.orange .val { color: #dd6b20; } .card.purple .val { color: #805ad5; }
-.card .lbl { font-size: 0.82rem; color: #718096; margin-top: 6px; }
+/* ── 摘要卡片 ── */
+.summary-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 18px; padding: 26px 36px 10px;
+}
+.card {
+  background: var(--surface); border-radius: var(--radius); padding: 22px 20px;
+  box-shadow: var(--shadow-md); text-align: center;
+  border: 1px solid var(--border);
+  position: relative; overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+.card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 5px;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.card.blue::before   { background: var(--grad-card-1); }
+.card.green::before  { background: var(--grad-card-2); }
+.card.orange::before { background: var(--grad-card-3); }
+.card.purple::before { background: var(--grad-card-4); }
+.card::after {
+  content: ''; position: absolute; bottom: -20px; right: -20px;
+  width: 80px; height: 80px; border-radius: 50%;
+  opacity: 0.05;
+}
+.card.blue::after   { background: var(--green-yellow); }
+.card.green::after  { background: var(--teal); }
+.card.orange::after { background: #e8930a; }
+.card.purple::after { background: var(--cyan); }
+.card .icon { font-size: 1.5rem; margin-bottom: 8px; display: block; }
+.card .val { font-size: 2.2rem; font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
+.card.blue .val   { color: #5a8a1a; }
+.card.green .val  { color: var(--teal); }
+.card.orange .val { color: #c07010; }
+.card.purple .val { color: var(--blue-teal); }
+.card .lbl { font-size: 0.8rem; color: var(--text-muted); margin-top: 7px; font-weight: 500; }
 
-.tabs { display: flex; gap: 8px; padding: 16px 32px 0; flex-wrap: wrap; }
-.tab-btn { padding: 8px 20px; border-radius: 8px; border: 2px solid #bee3f8; background: white; color: #3182ce; font-size: 0.9rem; font-family: inherit; cursor: pointer; transition: all 0.2s; font-weight: 600; }
-.tab-btn.active, .tab-btn:hover { background: #3182ce; color: white; border-color: #3182ce; }
+/* ── 頁籤 ── */
+.tabs {
+  display: flex; gap: 6px; padding: 20px 36px 0; flex-wrap: wrap;
+  border-bottom: 2px solid var(--border); margin: 6px 36px 0;
+}
+.tab-btn {
+  padding: 9px 22px; border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  border: 1.5px solid var(--border); border-bottom: none;
+  background: #eef7f4; color: var(--text-muted); font-size: 0.88rem;
+  font-family: inherit; cursor: pointer; transition: all 0.18s; font-weight: 600;
+  margin-bottom: -2px;
+}
+.tab-btn.active {
+  background: var(--surface); color: var(--teal);
+  border-color: var(--border); border-bottom: 2px solid var(--surface);
+}
+.tab-btn:hover:not(.active) { background: #d8f2ea; color: var(--teal); }
 
-.chart-type-bar { display: flex; align-items: center; gap: 8px; padding: 14px 32px 0; flex-wrap: wrap; }
-.chart-type-bar .ct-label { font-size: 0.82rem; font-weight: 700; color: #718096; margin-right: 4px; white-space: nowrap; }
-.ct-btn { display: flex; align-items: center; gap: 5px; padding: 5px 14px; border-radius: 20px; border: 2px solid #e2e8f0; background: white; color: #4a5568; font-size: 0.82rem; font-family: inherit; cursor: pointer; transition: all 0.15s; font-weight: 600; }
-.ct-btn.active { background: #ebf8ff; border-color: #3182ce; color: #2b6cb0; }
-.ct-btn:hover:not(.active) { border-color: #90cdf4; }
+/* ── 圖表類型選擇 ── */
+.chart-type-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 16px 36px 0; flex-wrap: wrap;
+}
+.chart-type-bar .ct-label { font-size: 0.8rem; font-weight: 700; color: var(--text-muted); margin-right: 4px; white-space: nowrap; }
+.ct-btn {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 14px; border-radius: 20px; border: 1.5px solid var(--border);
+  background: var(--surface); color: var(--text-muted); font-size: 0.8rem;
+  font-family: inherit; cursor: pointer; transition: all 0.15s; font-weight: 600;
+}
+.ct-btn.active { background: #e0f7ef; border-color: var(--teal); color: var(--teal); }
+.ct-btn:hover:not(.active) { border-color: #7dd4b8; background: #f0fbf7; }
 
-.chart-section { background: white; border-radius: 14px; margin: 16px 32px; padding: 24px; box-shadow: 0 1px 6px rgba(0,0,0,0.08); }
-.chart-section h2 { font-size: 1.05rem; font-weight: 700; color: #2d3748; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 2px solid #ebf8ff; }
+/* ── 圖表卡片 ── */
+.chart-section {
+  background: var(--surface); border-radius: var(--radius); margin: 18px 36px;
+  padding: 24px 26px; box-shadow: var(--shadow-md);
+  border: 1px solid var(--border);
+  transition: box-shadow 0.2s;
+}
+.chart-section:hover { box-shadow: var(--shadow-lg); }
 .chart-wrap { position: relative; height: 320px; }
-.type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 0 32px 16px; }
+.type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 0 36px 18px; }
 .type-grid .chart-section { margin: 0; }
-.side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 16px 32px; }
+.side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 18px 36px; }
 .side-by-side .chart-section { margin: 0; }
 
+/* ── 圖表標題 + 下載 ── */
+.chart-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 18px; padding-bottom: 12px;
+  border-bottom: 1.5px solid var(--border);
+}
+.chart-header h2 {
+  font-size: 1rem; font-weight: 700; color: var(--text); margin: 0;
+  display: flex; align-items: center; gap: 8px;
+}
+.chart-header h2::before {
+  content: ''; display: inline-block; width: 4px; height: 18px;
+  background: var(--grad-main);
+  border-radius: 2px; flex-shrink: 0;
+}
+.dl-btn {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 13px; border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  background: var(--surface); color: var(--teal);
+  font-size: 0.77rem; font-family: inherit;
+  cursor: pointer; transition: all 0.15s; font-weight: 600; white-space: nowrap;
+}
+.dl-btn:hover { background: #e0f7ef; border-color: var(--teal); }
+
+/* ── Footer ── */
+footer {
+  text-align: center; padding: 22px; font-size: 0.77rem;
+  color: var(--text-muted); border-top: 1px solid var(--border); margin-top: 12px;
+}
+
+/* ── RWD ── */
 @media (max-width: 700px) {
   .type-grid, .side-by-side { grid-template-columns: 1fr; }
   .summary-grid { padding: 16px; }
   .chart-section { margin: 12px; }
   .type-grid, .side-by-side { margin: 0 12px 12px; }
-  .tabs { padding: 12px 12px 0; }
-  .upload-bar { padding: 12px 16px; }
-  .chart-type-bar { padding: 10px 12px 0; }
+  .tabs { padding: 12px 12px 0; margin: 0 12px; }
+  .upload-bar, .chart-type-bar { padding: 12px 16px; }
+  header { padding: 20px; }
+  #cloud-bar { padding: 8px 16px; }
 }
+
 .hidden { display: none; }
-footer { text-align: center; padding: 20px; font-size: 0.78rem; color: #a0aec0; }
 </style>
 </head>
 <body>
@@ -98,19 +252,22 @@ footer { text-align: center; padding: 20px; font-size: 0.78rem; color: #a0aec0; 
 </div>
 
 <header>
-  <h1>📋 處方開立統計儀表板</h1>
+  <h1>◈ 健康處方開立統計儀表板</h1>
   <p id="headerDesc">載入中…</p>
 </header>
 
 <!-- 雲端同步狀態 -->
-<div id="cloud-bar" class="loading">
-  <div class="dot"></div>
-  <span id="cloud-msg">正在從雲端讀取最新資料…</span>
+<div id="cloud-bar" class="loading" style="justify-content:space-between;">
+  <div style="display:flex;align-items:center;gap:8px;">
+    <div class="dot"></div>
+    <span id="cloud-msg">正在從雲端讀取最新資料…</span>
+  </div>
+  <div id="view-counter" style="font-size:0.8rem;opacity:0.8;white-space:nowrap;"></div>
 </div>
 
 <!-- 上傳區 -->
 <div class="upload-bar">
-  <label>📂 更新資料：</label>
+  <label>📤 更新資料：</label>
   <div class="upload-drop" id="dropZone">
     <input type="file" id="fileInput" accept=".xlsx,.xls" />
     點此選擇或拖曳 Excel 檔案（.xlsx / .xls）
@@ -121,17 +278,17 @@ footer { text-align: center; padding: 20px; font-size: 0.78rem; color: #a0aec0; 
 
 <!-- 摘要卡片 -->
 <div class="summary-grid">
-  <div class="card blue">  <div class="val" id="sumTotal">—</div><div class="lbl">總開立數</div></div>
-  <div class="card green"> <div class="val" id="sumExec">—</div>  <div class="lbl">總執行數</div></div>
-  <div class="card orange"><div class="val" id="sumRate">—</div>  <div class="lbl">整體執行率</div></div>
-  <div class="card purple"><div class="val" id="sumWeeks">—</div> <div class="lbl">統計週數</div></div>
+  <div class="card blue">  <span class="icon">📁</span><div class="val" id="sumTotal">—</div><div class="lbl">總開立數</div></div>
+  <div class="card green"> <span class="icon">☑️</span><div class="val" id="sumExec">—</div><div class="lbl">總執行數</div></div>
+  <div class="card orange"><span class="icon">📈</span><div class="val" id="sumRate">—</div><div class="lbl">整體執行率</div></div>
+  <div class="card purple"><span class="icon">🗓️</span><div class="val" id="sumWeeks">—</div><div class="lbl">統計週數</div></div>
 </div>
 
 <!-- 頁籤 -->
 <div class="tabs">
-  <button class="tab-btn active" onclick="showTab('weekly',this)">📅 每週趨勢</button>
-  <button class="tab-btn" onclick="showTab('type',this)">📈 處方開立分析</button>
-  <button class="tab-btn" onclick="showTab('typeweekly',this)">🔍 各類型週趨勢細項</button>
+  <button class="tab-btn active" onclick="showTab('weekly',this)">📂 每週趨勢</button>
+  <button class="tab-btn" onclick="showTab('type',this)">📊 處方開立分析</button>
+  <button class="tab-btn" onclick="showTab('typeweekly',this)">🔎 各類型週趨勢細項</button>
 </div>
 
 <!-- ═══ TAB 1 ═══ -->
@@ -139,12 +296,12 @@ footer { text-align: center; padding: 20px; font-size: 0.78rem; color: #a0aec0; 
   <div class="chart-type-bar">
     <span class="ct-label">圖表類型：</span>
     <button class="ct-btn active" onclick="setChartType('weekly','bar',this)"><span>📊</span> 直條圖</button>
-    <button class="ct-btn" onclick="setChartType('weekly','horizontalBar',this)"><span>↔️</span> 橫條圖</button>
+    <button class="ct-btn" onclick="setChartType('weekly','horizontalBar',this)"><span>📉</span> 橫條圖</button>
     <button class="ct-btn" onclick="setChartType('weekly','line',this)"><span>📈</span> 折線圖</button>
     <button class="ct-btn" onclick="setChartType('weekly','area',this)"><span>🏔️</span> 面積圖</button>
   </div>
-  <div class="chart-section"><h2 id="w1-title">每週處方開立數</h2><div class="chart-wrap"><canvas id="weeklyBarChart"></canvas></div></div>
-  <div class="chart-section"><h2 id="w2-title">每週處方執行數</h2><div class="chart-wrap"><canvas id="weeklyExecChart"></canvas></div></div>
+  <div class="chart-section"><div class="chart-header"><h2 id="w1-title">每週處方開立數</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap"><canvas id="weeklyBarChart"></canvas></div></div>
+  <div class="chart-section"><div class="chart-header"><h2 id="w2-title">每週處方執行數</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap"><canvas id="weeklyExecChart"></canvas></div></div>
 </div>
 
 <!-- ═══ TAB 2 ═══ -->
@@ -153,22 +310,22 @@ footer { text-align: center; padding: 20px; font-size: 0.78rem; color: #a0aec0; 
     <span class="ct-label">圖表類型：</span>
     <button class="ct-btn active" onclick="setChartType('type','line',this)"><span>📈</span> 折線（累積）</button>
     <button class="ct-btn" onclick="setChartType('type','pie',this)"><span>🥧</span> 圓餅圖</button>
-    <button class="ct-btn" onclick="setChartType('type','doughnut',this)"><span>🍩</span> 甜甜圈</button>
-    <button class="ct-btn" onclick="setChartType('type','hbar',this)"><span>📊</span> 橫條對比</button>
+    <button class="ct-btn" onclick="setChartType('type','doughnut',this)"><span>⭕</span> 甜甜圈</button>
+    <button class="ct-btn" onclick="setChartType('type','hbar',this)"><span>📉</span> 橫條對比</button>
   </div>
   <div id="type-line-view">
-    <div class="chart-section"><h2>處方開立數累積趨勢（依週）</h2><div class="chart-wrap"><canvas id="cumPrescribeChart"></canvas></div></div>
-    <div class="chart-section"><h2>執行數累積趨勢（依週）</h2><div class="chart-wrap"><canvas id="cumExecChart"></canvas></div></div>
+    <div class="chart-section"><div class="chart-header"><h2>處方開立數累積趨勢（依週）</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap"><canvas id="cumPrescribeChart"></canvas></div></div>
+    <div class="chart-section"><div class="chart-header"><h2>執行數累積趨勢（依週）</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap"><canvas id="cumExecChart"></canvas></div></div>
   </div>
   <div id="type-pie-view" class="hidden">
     <div class="side-by-side">
-      <div class="chart-section"><h2>各類型開立數佔比</h2><div class="chart-wrap"><canvas id="piePresChart"></canvas></div></div>
-      <div class="chart-section"><h2>各類型執行數佔比</h2><div class="chart-wrap"><canvas id="pieExecChart"></canvas></div></div>
+      <div class="chart-section"><div class="chart-header"><h2>各類型開立數佔比</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap"><canvas id="piePresChart"></canvas></div></div>
+      <div class="chart-section"><div class="chart-header"><h2>各類型執行數佔比</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap"><canvas id="pieExecChart"></canvas></div></div>
     </div>
   </div>
   <div id="type-hbar-view" class="hidden">
-    <div class="chart-section"><h2>各類型開立數 vs 執行數（橫條對比）</h2><div class="chart-wrap" style="height:260px"><canvas id="hbarTypeChart"></canvas></div></div>
-    <div class="chart-section"><h2>各類型執行率（%）</h2><div class="chart-wrap" style="height:200px"><canvas id="hbarRateChart"></canvas></div></div>
+    <div class="chart-section"><div class="chart-header"><h2>各類型開立數 vs 執行數（橫條對比）</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:260px"><canvas id="hbarTypeChart"></canvas></div></div>
+    <div class="chart-section"><div class="chart-header"><h2>各類型執行率（%）</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:200px"><canvas id="hbarRateChart"></canvas></div></div>
   </div>
 </div>
 
@@ -179,27 +336,27 @@ footer { text-align: center; padding: 20px; font-size: 0.78rem; color: #a0aec0; 
     <button class="ct-btn active" onclick="setChartType('typeweekly','line',this)"><span>📈</span> 折線圖</button>
     <button class="ct-btn" onclick="setChartType('typeweekly','bar',this)"><span>📊</span> 直條群組</button>
     <button class="ct-btn" onclick="setChartType('typeweekly','area',this)"><span>🏔️</span> 面積圖</button>
-    <button class="ct-btn" onclick="setChartType('typeweekly','hbar',this)"><span>↔️</span> 橫條對比</button>
+    <button class="ct-btn" onclick="setChartType('typeweekly','hbar',this)"><span>📉</span> 橫條對比</button>
   </div>
   <div id="tw-multi-view">
     <div class="type-grid">
-      <div class="chart-section"><h2>情緒調適處方</h2><div class="chart-wrap" style="height:260px"><canvas id="twDetail0"></canvas></div></div>
-      <div class="chart-section"><h2>營養處方</h2><div class="chart-wrap" style="height:260px"><canvas id="twDetail1"></canvas></div></div>
-      <div class="chart-section"><h2>社會處方</h2><div class="chart-wrap" style="height:260px"><canvas id="twDetail2"></canvas></div></div>
-      <div class="chart-section"><h2>運動處方</h2><div class="chart-wrap" style="height:260px"><canvas id="twDetail3"></canvas></div></div>
+      <div class="chart-section"><div class="chart-header"><h2>情緒調適處方</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:260px"><canvas id="twDetail0"></canvas></div></div>
+      <div class="chart-section"><div class="chart-header"><h2>營養處方</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:260px"><canvas id="twDetail1"></canvas></div></div>
+      <div class="chart-section"><div class="chart-header"><h2>社會處方</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:260px"><canvas id="twDetail2"></canvas></div></div>
+      <div class="chart-section"><div class="chart-header"><h2>運動處方</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:260px"><canvas id="twDetail3"></canvas></div></div>
     </div>
   </div>
   <div id="tw-hbar-view" class="hidden">
     <div class="type-grid">
-      <div class="chart-section"><h2>情緒調適處方</h2><div class="chart-wrap" style="height:260px"><canvas id="twHbar0"></canvas></div></div>
-      <div class="chart-section"><h2>營養處方</h2><div class="chart-wrap" style="height:260px"><canvas id="twHbar1"></canvas></div></div>
-      <div class="chart-section"><h2>社會處方</h2><div class="chart-wrap" style="height:260px"><canvas id="twHbar2"></canvas></div></div>
-      <div class="chart-section"><h2>運動處方</h2><div class="chart-wrap" style="height:260px"><canvas id="twHbar3"></canvas></div></div>
+      <div class="chart-section"><div class="chart-header"><h2>情緒調適處方</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:260px"><canvas id="twHbar0"></canvas></div></div>
+      <div class="chart-section"><div class="chart-header"><h2>營養處方</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:260px"><canvas id="twHbar1"></canvas></div></div>
+      <div class="chart-section"><div class="chart-header"><h2>社會處方</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:260px"><canvas id="twHbar2"></canvas></div></div>
+      <div class="chart-section"><div class="chart-header"><h2>運動處方</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:260px"><canvas id="twHbar3"></canvas></div></div>
     </div>
   </div>
 </div>
 
-<footer>處方統計儀表板 · 資料儲存於 Supabase 雲端 · 圖表以 Chart.js 製作</footer>
+<footer>健康處方開立統計儀表板 &nbsp;·&nbsp; ⬡ 資料儲存於 Supabase &nbsp;·&nbsp; ◈ 圖表由 Chart.js 製作</footer>
 
 <script>
 // ══════════════════════════════════════════════
@@ -221,9 +378,9 @@ if (isConfigured) {
 // ══════════════════════════════════════════════
 //  色彩常數
 // ══════════════════════════════════════════════
-const TYPE_COLORS   = ['#dd6b20','#38a169','#805ad5','#2c7a7b'];
-const TYPE_COLORS_A = ['rgba(221,107,32,0.75)','rgba(56,161,105,0.75)','rgba(128,90,213,0.75)','rgba(44,122,123,0.75)'];
-const PIE_COLORS    = ['#3182ce','#38a169','#dd6b20','#805ad5'];
+const TYPE_COLORS   = ['#8fba2e','#2aac8a','#1a9fbe','#1a7ea0'];
+const TYPE_COLORS_A = ['rgba(143,186,46,0.75)','rgba(42,172,138,0.75)','rgba(26,159,190,0.75)','rgba(26,126,160,0.75)'];
+const PIE_COLORS    = ['#8fba2e','#2aac8a','#1a9fbe','#1a7ea0'];
 const defaultFont   = {family:"'Microsoft JhengHei','Noto Sans TC',sans-serif", size:12};
 const chartInstances = {};
 const currentChartType = {weekly:'bar', type:'line', typeweekly:'line'};
@@ -268,7 +425,7 @@ async function loadFromCloud() {
     const fn       = data.file_name  || '—';
     const at       = data.uploaded_at ? new Date(data.uploaded_at).toLocaleString('zh-TW') : '—';
     document.getElementById('headerDesc').textContent = `資料區間：${dr}　｜　共 ${weeklyData.reduce((s,d)=>s+d.開立數,0).toLocaleString()} 筆處方紀錄`;
-    setCloudStatus('', `☁️ 已載入最新資料　來源：${fn}　上傳時間：${at}`);
+    setCloudStatus('', `✦ 已載入最新資料　來源：${fn}　上傳時間：${at}`);
     updateSummary();
     buildAllCharts();
   } catch(e) {
@@ -293,6 +450,37 @@ async function saveToCloud(payload) {
       uploaded_at:     new Date().toISOString()
     });
   return !error;
+}
+
+// ══════════════════════════════════════════════
+//  閱覽計數
+// ══════════════════════════════════════════════
+function getThisWeekKey() {
+  const now = new Date();
+  const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  const day = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return `${d.getUTCFullYear()}W${String(weekNo).padStart(2,'0')}`;
+}
+
+async function incrementViewCount() {
+  if (!sbClient) return;
+  try {
+    const weekKey = getThisWeekKey();
+    // 先讀取目前計數
+    const { data } = await sbClient
+      .from('view_counts')
+      .select('count')
+      .eq('week_key', weekKey)
+      .single();
+    const newCount = (data?.count || 0) + 1;
+    // 更新或新增
+    await sbClient.from('view_counts').upsert({ week_key: weekKey, count: newCount });
+    // 顯示
+    document.getElementById('view-counter').textContent = `◉ 本週閱覽 ${newCount} 次`;
+  } catch(e) { /* 靜默失敗 */ }
 }
 
 // ══════════════════════════════════════════════
@@ -371,11 +559,11 @@ function buildWeeklyCharts(mode){
   if(isLn){
     const mkLine = (id, data, color, label) => new Chart(document.getElementById(id).getContext('2d'), {
       type:'line', plugins:[lineLabelPlugin],
-      data:{labels:weeks, datasets:[{label, data, borderColor:color, backgroundColor:color.replace('rgb','rgba').replace(')',',0.15)'), pointRadius:5, pointBackgroundColor:color, pointBorderColor:'#fff', pointBorderWidth:2, tension:0.3, fill:isFill, borderWidth:2.5}]},
+      data:{labels:weeks, datasets:[{label, data, borderColor:color, backgroundColor:color+'28', pointRadius:5, pointBackgroundColor:color, pointBorderColor:'#fff', pointBorderWidth:2, tension:0.3, fill:isFill, borderWidth:2.5}]},
       options:{responsive:true, maintainAspectRatio:false, layout:{padding:{top:24}}, plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>` ${label}：${c.parsed.y} 筆`}}}, scales:xyScales()}
     });
-    chartInstances['weeklyBar']  = mkLine('weeklyBarChart',  presData, '#3182ce', '開立數');
-    chartInstances['weeklyExec'] = mkLine('weeklyExecChart', execData, '#38a169', '執行數');
+    chartInstances['weeklyBar']  = mkLine('weeklyBarChart',  presData, '#2aac8a', '開立數');
+    chartInstances['weeklyExec'] = mkLine('weeklyExecChart', execData, '#1a9fbe', '執行數');
     return;
   }
   const mkBar = (id, data, bg, border, label) => {
@@ -386,8 +574,8 @@ function buildWeeklyCharts(mode){
       options:{indexAxis:isH?'y':'x', responsive:true, maintainAspectRatio:false, layout:{padding:isH?{right:40}:{top:20}}, plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>` ${label}：${c.parsed[isH?'x':'y']} 筆`}}}, scales:xyScales(isH)}
     });
   };
-  chartInstances['weeklyBar']  = mkBar('weeklyBarChart',  presData, 'rgba(49,130,206,0.75)', '#3182ce', '開立數');
-  chartInstances['weeklyExec'] = mkBar('weeklyExecChart', execData, 'rgba(56,161,105,0.75)', '#38a169', '執行數');
+  chartInstances['weeklyBar']  = mkBar('weeklyBarChart',  presData, 'rgba(42,172,138,0.75)', '#2aac8a', '開立數');
+  chartInstances['weeklyExec'] = mkBar('weeklyExecChart', execData, 'rgba(26,159,190,0.75)', '#1a9fbe', '執行數');
 }
 
 // ══════════════════════════════════════════════
@@ -439,7 +627,7 @@ function buildTypeCharts(mode){
     document.getElementById('type-hbar-view').classList.remove('hidden');
     chartInstances['hbarType'] = new Chart(document.getElementById('hbarTypeChart').getContext('2d'), {
       type:'bar', plugins:[barLabelPlugin],
-      data:{labels:types, datasets:[{label:'開立數', data:typeStats.map(d=>d.開立數), backgroundColor:'rgba(49,130,206,0.8)', borderRadius:4},{label:'執行數', data:typeStats.map(d=>d.執行數), backgroundColor:'rgba(56,161,105,0.8)', borderRadius:4}]},
+      data:{labels:types, datasets:[{label:'開立數', data:typeStats.map(d=>d.開立數), backgroundColor:'rgba(42,172,138,0.8)', borderRadius:4},{label:'執行數', data:typeStats.map(d=>d.執行數), backgroundColor:'rgba(26,159,190,0.8)', borderRadius:4}]},
       options:{indexAxis:'y', responsive:true, maintainAspectRatio:false, layout:{padding:{right:48}}, plugins:{legend:{position:'top', labels:{font:defaultFont}}, tooltip:{callbacks:{label:c=>` ${c.dataset.label}：${c.parsed.x} 筆`}}}, scales:xyScales(true)}
     });
     chartInstances['hbarRate'] = new Chart(document.getElementById('hbarRateChart').getContext('2d'), {
@@ -471,7 +659,7 @@ function buildTypeWeeklyCharts(mode){
       if(!document.getElementById(canvasId)) return;
       chartInstances['twHbar'+i] = new Chart(document.getElementById(canvasId).getContext('2d'), {
         type:'bar', plugins:[barLabelPlugin],
-        data:{labels:[...weeks].reverse(), datasets:[{label:'開立數', data:[...presData].reverse(), backgroundColor:'rgba(49,130,206,0.8)', borderRadius:4},{label:'執行數', data:[...execData].reverse(), backgroundColor:TYPE_COLORS_A[i], borderRadius:4}]},
+        data:{labels:[...weeks].reverse(), datasets:[{label:'開立數', data:[...presData].reverse(), backgroundColor:'rgba(42,172,138,0.8)', borderRadius:4},{label:'執行數', data:[...execData].reverse(), backgroundColor:TYPE_COLORS_A[i], borderRadius:4}]},
         options:{indexAxis:'y', responsive:true, maintainAspectRatio:false, layout:{padding:{right:48}}, plugins:{legend:{position:'top', labels:{font:smFont, boxWidth:12, padding:8}}, tooltip:{callbacks:{label:c=>` ${c.dataset.label}：${c.parsed.x} 筆`}}}, scales:{x:{ticks:{font:smFont},beginAtZero:true,grid:{color:'#e2e8f0'}},y:{ticks:{font:smFont},grid:{display:false}}}}
       });
     });
@@ -496,7 +684,7 @@ function buildTypeWeeklyCharts(mode){
       chartInstances['tw'+i] = new Chart(document.getElementById(canvasId).getContext('2d'), {
         type:'line', plugins:[lineLabelPlugin],
         data:{labels:weeks, datasets:[
-          {label:'開立數',data:presData,borderColor:'#3182ce',backgroundColor:'rgba(49,130,206,0.08)',pointRadius:4,pointBackgroundColor:'#3182ce',pointBorderColor:'#fff',pointBorderWidth:2,tension:0.3,borderWidth:2,fill:isFill},
+          {label:'開立數',data:presData,borderColor:'#2aac8a',backgroundColor:'rgba(49,130,206,0.08)',pointRadius:4,pointBackgroundColor:'#2aac8a',pointBorderColor:'#fff',pointBorderWidth:2,tension:0.3,borderWidth:2,fill:isFill},
           {label:'執行數',data:execData,borderColor:TYPE_COLORS[i],backgroundColor:TYPE_COLORS[i]+'20',pointRadius:4,pointBackgroundColor:TYPE_COLORS[i],pointBorderColor:'#fff',pointBorderWidth:2,tension:0.3,borderWidth:2,fill:isFill}
         ]},
         options:{responsive:true, maintainAspectRatio:false, layout:{padding:{top:24}}, plugins:{legend:{position:'top',labels:{font:smFont,boxWidth:12,padding:8}},tooltip:{callbacks:{label:c=>` ${c.dataset.label}：${c.parsed.y} 筆`}}}, scales:{x:{ticks:{font:smFont,maxRotation:45},grid:{display:false}},y:{ticks:{font:smFont},beginAtZero:true,grid:{color:'#e2e8f0'}}}}
@@ -620,7 +808,7 @@ async function handleFile(file){
     const ok = await saveToCloud({weeklyData:newWeeklyData, typeStats:newTypeStats, typeWeeklyRaw:newTWRaw, dateRange, fileName:file.name});
     if(ok){
       setStatus(`✅ 已儲存「${file.name}」到雲端，所有人重新整理後即可看到最新資料`);
-      setCloudStatus('', `☁️ 已更新　來源：${file.name}　上傳時間：${new Date().toLocaleString('zh-TW')}`);
+      setCloudStatus('', `✦ 已更新　來源：${file.name}　上傳時間：${new Date().toLocaleString('zh-TW')}`);
     } else {
       setStatus(`⚠️ 本機已更新，但雲端儲存失敗（請確認 Supabase 設定）`, true);
     }
@@ -643,8 +831,39 @@ function showTab(name, btn){
   if(btn) btn.classList.add('active');
 }
 
-// ── 初始化：從雲端讀取 ──
+// ══════════════════════════════════════════════
+//  下載圖表為 JPG
+// ══════════════════════════════════════════════
+function downloadChart(btn) {
+  // 找到同一個 chart-section 裡的 canvas
+  const section = btn.closest('.chart-section');
+  const canvas = section.querySelector('canvas');
+  if (!canvas) { alert('找不到圖表'); return; }
+
+  // 取得圖表標題作為檔名
+  const h2 = section.querySelector('h2');
+  const title = h2 ? h2.textContent.trim() : 'chart';
+  const filename = title + '.jpg';
+
+  // 建立白底畫布（JPG 不支援透明）
+  const tmpCanvas = document.createElement('canvas');
+  tmpCanvas.width  = canvas.width;
+  tmpCanvas.height = canvas.height;
+  const ctx = tmpCanvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, tmpCanvas.width, tmpCanvas.height);
+  ctx.drawImage(canvas, 0, 0);
+
+  // 下載
+  const link = document.createElement('a');
+  link.download = filename;
+  link.href = tmpCanvas.toDataURL('image/jpeg', 0.95);
+  link.click();
+}
+
+// ── 初始化：從雲端讀取 + 計算閱覽次數 ──
 loadFromCloud();
+incrementViewCount();
 </script>
 </body>
 </html>
