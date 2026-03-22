@@ -1185,17 +1185,38 @@ function parseExcel(file){
           const wl=isoWeekLabel(pd);if(!wl)return;
           const type   = row[colType]?row[colType].toString().trim():'未分類';
           const clinic = colClinic && row[colClinic] ? row[colClinic].toString().trim() : null;
+          // 執行狀態判斷
           let ex = false;
-          if(colExecD && row[colExecD]){ ex = !!toDate(row[colExecD]); }
+          let exWl = null; // 執行數歸屬的週次（依執行日期）
+          if(colExecD && row[colExecD]){
+            const ed = toDate(row[colExecD]);
+            if(ed){ ex = true; exWl = isoWeekLabel(ed); }
+          }
           if(!ex && colExecS){ const s=row[colExecS]; ex = !!s&&['是','1','true','已執行','v','V','✓'].includes(s.toString().trim()); }
+          // 若執行日期無效或用狀態欄判斷，執行週次 fallback 到開立週次
+          if(ex && !exWl) exWl = wl;
           const enrolled = !!(colEnroll && row[colEnroll] && row[colEnroll].toString().trim().toUpperCase()==='V');
+
+          // 開立數：依開立日期週次
           if(!weekMap[wl])weekMap[wl]={開立數:0,執行數:0};
-          weekMap[wl].開立數++;if(ex)weekMap[wl].執行數++;
+          weekMap[wl].開立數++;
+          // 執行數：依執行日期週次
+          if(ex && exWl){
+            if(!weekMap[exWl])weekMap[exWl]={開立數:0,執行數:0};
+            weekMap[exWl].執行數++;
+          }
+
           if(!typeWeekMap[type])typeWeekMap[type]={};
           if(!typeWeekMap[type][wl])typeWeekMap[type][wl]={開立數:0,執行數:0};
-          typeWeekMap[type][wl].開立數++;if(ex)typeWeekMap[type][wl].執行數++;
+          typeWeekMap[type][wl].開立數++;
+          if(ex && exWl){
+            if(!typeWeekMap[type][exWl])typeWeekMap[type][exWl]={開立數:0,執行數:0};
+            typeWeekMap[type][exWl].執行數++;
+          }
+
           if(!typeMapTotal[type])typeMapTotal[type]={開立數:0,執行數:0};
           typeMapTotal[type].開立數++;if(ex)typeMapTotal[type].執行數++;
+
           if(clinic){
             if(!clinicMap[clinic])clinicMap[clinic]={開立數:0,選課或執行:0};
             clinicMap[clinic].開立數++;
