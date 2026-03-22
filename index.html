@@ -1243,23 +1243,24 @@ function parseExcel(file){
         const existingWeeks=Object.keys(weekMap).sort();
         const allWeeks=[];
         if(existingWeeks.length>=2){
+          // 用 isoWeekLabel 推算下一週，與週六起始定義完全一致
+          function nextWeekLabel(wl){
+            const yr=parseInt(wl.slice(0,4)),wk=parseInt(wl.slice(5));
+            const jan1=new Date(Date.UTC(yr,0,1));
+            const jan1dow=jan1.getUTCDay();
+            const daysToFirstSat=(jan1dow===6)?0:(6-jan1dow);
+            const firstSat=new Date(jan1.getTime()+daysToFirstSat*86400000);
+            // 這週的週六 + 7天 = 下週週六
+            const thisWeekSat=new Date(firstSat.getTime()+(wk-1)*7*86400000);
+            const nextWeekSat=new Date(thisWeekSat.getTime()+7*86400000);
+            return isoWeekLabel(nextWeekSat);
+          }
           let cur=existingWeeks[0];
           const last=existingWeeks[existingWeeks.length-1];
-          while(cur<=last){
+          let safety=0;
+          while(cur<=last && safety++<200){
             allWeeks.push(cur);
-            const yr=parseInt(cur.slice(0,4)),wk=parseInt(cur.slice(5));
-            const jan4=new Date(Date.UTC(yr,0,4));
-            const startOfW1=new Date(jan4);
-            startOfW1.setUTCDate(jan4.getUTCDate()-((jan4.getUTCDay()||7)-1));
-            const thisWeekStart=new Date(startOfW1.getTime()+(wk-1)*7*86400*1000);
-            const nextWeekStart=new Date(thisWeekStart.getTime()+7*86400*1000);
-            const nd=new Date(nextWeekStart.toISOString());
-            const nday=nd.getUTCDay()||7;
-            nd.setUTCDate(nd.getUTCDate()+4-nday);
-            const nyr=nd.getUTCFullYear();
-            const nyrStart=new Date(Date.UTC(nyr,0,1));
-            const nwk=Math.ceil((((nd-nyrStart)/86400000)+1)/7);
-            cur=`${nyr}W${String(nwk).padStart(2,'0')}`;
+            cur=nextWeekLabel(cur);
           }
         } else { allWeeks.push(...existingWeeks); }
         const sw=allWeeks;
