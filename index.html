@@ -772,12 +772,7 @@ async function saveToCloud(payload) {
 // ══════════════════════════════════════════════
 function getThisWeekKey() {
   const now = new Date();
-  const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
-  const day = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - day);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-  return `${d.getUTCFullYear()}W${String(weekNo).padStart(2,'0')}`;
+  return isoWeekLabel(new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())));
 }
 async function incrementViewCount() {
   if (!sbClient) return;
@@ -795,12 +790,33 @@ async function incrementViewCount() {
 // ══════════════════════════════════════════════
 function isoWeekLabel(date) {
   if (!(date instanceof Date) || isNaN(date)) return null;
+  // 週次定義：每週六開始，下週五結束
+  // 先取 UTC 日期
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const day = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - day);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-  return `${d.getUTCFullYear()}W${String(weekNo).padStart(2,'0')}`;
+  const dow = d.getUTCDay(); // 0=日,1=一,...,6=六
+  // 把日期往回推到該週的週六（週六=6往回0天，週日=0往回1天，週一=1往回2天...週五=5往回6天）
+  const daysToSat = (dow === 6) ? 0 : (dow + 1);
+  const weekSat = new Date(d.getTime() - daysToSat * 86400000);
+  // 用週六的年份和在該年的第幾個週六來產生週標籤
+  const yr = weekSat.getUTCFullYear();
+  // 該年第一個週六
+  const jan1 = new Date(Date.UTC(yr, 0, 1));
+  const jan1dow = jan1.getUTCDay();
+  const daysToFirstSat = (jan1dow === 6) ? 0 : (6 - jan1dow);
+  const firstSat = new Date(jan1.getTime() + daysToFirstSat * 86400000);
+  let weekNo;
+  if (weekSat < firstSat) {
+    // 屬於上一年的最後一週
+    const prevYr = yr - 1;
+    const prevJan1 = new Date(Date.UTC(prevYr, 0, 1));
+    const prevJan1dow = prevJan1.getUTCDay();
+    const daysToPrevFirstSat = (prevJan1dow === 6) ? 0 : (6 - prevJan1dow);
+    const prevFirstSat = new Date(prevJan1.getTime() + daysToPrevFirstSat * 86400000);
+    weekNo = Math.round((weekSat - prevFirstSat) / (7 * 86400000)) + 1;
+    return `${prevYr}W${String(weekNo).padStart(2,'0')}`;
+  }
+  weekNo = Math.round((weekSat - firstSat) / (7 * 86400000)) + 1;
+  return `${yr}W${String(weekNo).padStart(2,'0')}`;
 }
 
 // ══════════════════════════════════════════════
