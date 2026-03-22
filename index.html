@@ -1705,61 +1705,98 @@ async function startPdfExport() {
     progressBar.style.width = '80%';
     await new Promise(r => setTimeout(r, 30));
 
-    const SLOT_W = (CONTENT_W - MARGIN) / 2; // 每個圖表槽的寬度
+    const SLOT_W = (CONTENT_W - MARGIN) / 2;
     const SLOT_H = CONTENT_H;
+
+    // 用 canvas 繪製頁首（解決 jsPDF 中文亂碼）
+    function makeHeaderCanvas(pageNum, totalPages) {
+      const W = 2480, H = 120; // A4 橫向 300dpi 寬度，頁首高度
+      const c = document.createElement('canvas');
+      c.width = W; c.height = H;
+      const cx = c.getContext('2d');
+      // 漸層裝飾線
+      const grad = cx.createLinearGradient(0, 0, W, 0);
+      grad.addColorStop(0, '#8fba2e'); grad.addColorStop(0.5, '#2aac8a'); grad.addColorStop(1, '#1a9fbe');
+      cx.fillStyle = grad; cx.fillRect(0, 0, W, 8);
+      // 標題
+      cx.fillStyle = '#3a6a58';
+      cx.font = `bold 52px "Microsoft JhengHei","Noto Sans TC",sans-serif`;
+      cx.textBaseline = 'middle'; cx.textAlign = 'left';
+      cx.fillText('◈ 健康處方開立統計儀表板', 20, 65);
+      // 週次備註
+      cx.fillStyle = '#7aaa94';
+      cx.font = `40px "Microsoft JhengHei","Noto Sans TC",sans-serif`;
+      cx.fillText('＊週次定義：每週六起算至下週五結束', 20, 100);
+      // 右側：匯出日期 + 頁碼
+      const dateStr = new Date().toLocaleDateString('zh-TW');
+      cx.fillStyle = '#5a8a74';
+      cx.font = `40px "Microsoft JhengHei","Noto Sans TC",sans-serif`;
+      cx.textAlign = 'right';
+      cx.fillText(`匯出日期：${dateStr}　　第 ${pageNum} 頁 / 共 ${totalPages} 頁`, W - 20, 65);
+      return c.toDataURL('image/jpeg', 0.92);
+    }
+
+    // 最後一頁若只有 1 張：改為置中單張（全版）
+    const lastIsAlone = images.length % 2 === 1;
 
     let isFirstPage = true;
     for (let i = 0; i < images.length; i += 2) {
       if (!isFirstPage) pdf.addPage();
       isFirstPage = false;
 
-      // 頁首
-      pdf.setFillColor(143, 186, 46);
-      pdf.rect(MARGIN, MARGIN, CONTENT_W, 0.8, 'F');
-      pdf.setFontSize(9);
-      pdf.setTextColor(90, 122, 112);
-      pdf.text('◈ 健康處方開立統計儀表板', MARGIN, MARGIN + 5);
-      const dateStr = new Date().toLocaleDateString('zh-TW');
-      pdf.text(`匯出日期：${dateStr}`, PAGE_W - MARGIN, MARGIN + 5, { align: 'right' });
-      // 週次備註
-      pdf.setFontSize(7.5);
-      pdf.setTextColor(120, 150, 140);
-      pdf.text('＊週次定義：每週六起算至下週五結束', MARGIN, MARGIN + 10);
-
-      // 頁碼
       const pageNum = Math.floor(i / 2) + 1;
       const totalPages = Math.ceil(images.length / 2);
-      pdf.setFontSize(8);
-      pdf.setTextColor(150, 170, 160);
-      pdf.text(`第 ${pageNum} 頁 / 共 ${totalPages} 頁`, PAGE_W / 2, PAGE_H - MARGIN + 2, { align: 'center' });
 
-      // 放置圖表
-      const slots = [
-        { x: MARGIN, y: MARGIN + HEADER_H },
-        { x: MARGIN + SLOT_W + MARGIN, y: MARGIN + HEADER_H }
-      ];
+      // 頁首（canvas 圖片，無亂碼）
+      const headerDataUrl = makeHeaderCanvas(pageNum, totalPages);
+      const HEADER_IMG_H = HEADER_H - 1;
+      pdf.addImage(headerDataUrl, 'JPEG', MARGIN, MARGIN, CONTENT_W, HEADER_IMG_H);
 
-      for (let j = 0; j < 2; j++) {
-        const imgIdx = i + j;
-        if (imgIdx >= images.length) break;
-        const img = images[imgIdx];
-        const slot = slots[j];
+      // 頁碼分隔線
+      pdf.setDrawColor(214, 237, 229);
+      pdf.setLineWidth(0.3);
+      pdf.line(MARGIN, PAGE_H - MARGIN - 4, PAGE_W - MARGIN, PAGE_H - MARGIN - 4);
 
-        // 計算等比縮放
-        const scaleX = SLOT_W / (img.w / 3.7795); // px to mm (96dpi)
+      // 判斷是否最後一頁只剩 1 張
+      const isLastAlone = lastIsAlone && i === images.length - 1;
+
+      if (isLastAlone) {
+        // 單張置中放大
+        const img = images[i];
+        const fullW = CONTENT_W;
+        const scaleX = fullW / (img.w / 3.7795);
         const scaleY = SLOT_H / (img.h / 3.7795);
-        const scale = Math.min(scaleX, scaleY, 1);
+        const scale = Math.min(scaleX, scaleY);
         const drawW = (img.w / 3.7795) * scale;
         const drawH = (img.h / 3.7795) * scale;
-        // 垂直置中
+        const offsetX = (CONTENT_W - drawW) / 2;
         const offsetY = (SLOT_H - drawH) / 2;
-
-        // 圖表背景卡片
         pdf.setFillColor(255, 255, 255);
         pdf.setDrawColor(214, 237, 229);
-        pdf.roundedRect(slot.x, slot.y, SLOT_W, SLOT_H, 3, 3, 'FD');
-
-        pdf.addImage(img.dataUrl, 'JPEG', slot.x + 2, slot.y + offsetY + 2, drawW - 4, drawH - 4);
+        pdf.roundedRect(MARGIN, MARGIN + HEADER_H, CONTENT_W, SLOT_H, 3, 3, 'FD');
+        pdf.addImage(img.dataUrl, 'JPEG', MARGIN + offsetX + 2, MARGIN + HEADER_H + offsetY + 2, drawW - 4, drawH - 4);
+      } else {
+        // 正常雙欄
+        const slots = [
+          { x: MARGIN, y: MARGIN + HEADER_H },
+          { x: MARGIN + SLOT_W + MARGIN, y: MARGIN + HEADER_H }
+        ];
+        for (let j = 0; j < 2; j++) {
+          const imgIdx = i + j;
+          if (imgIdx >= images.length) break;
+          const img = images[imgIdx];
+          const slot = slots[j];
+          const scaleX = SLOT_W / (img.w / 3.7795);
+          const scaleY = SLOT_H / (img.h / 3.7795);
+          const scale = Math.min(scaleX, scaleY);
+          const drawW = (img.w / 3.7795) * scale;
+          const drawH = (img.h / 3.7795) * scale;
+          const offsetY = (SLOT_H - drawH) / 2;
+          pdf.setFillColor(255, 255, 255);
+          pdf.setDrawColor(214, 237, 229);
+          pdf.roundedRect(slot.x, slot.y, SLOT_W, SLOT_H, 3, 3, 'FD');
+          pdf.addImage(img.dataUrl, 'JPEG', slot.x + 2, slot.y + offsetY + 2, drawW - 4, drawH - 4);
+        }
       }
     }
 
