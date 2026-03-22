@@ -948,35 +948,33 @@ function buildTypeCharts(mode){
   const types=typeStats.map(d=>d.處方類型);
   if(mode==='line'){
     document.getElementById('type-line-view').classList.remove('hidden');
-    let cumP=0,cumE=0;
-    // 累積值：每週累加
-    const cumPres=weeklyData.map(d=>{ cumP+=d.開立數; return cumP; });
-    const cumExec=weeklyData.map(d=>{ cumE+=d.執行數; return cumE; });
-    // 後段空週次（開立數=0）補為前一週的累積值，確保折線和填色延伸到最後一個週次
-    for(let i=1;i<cumPres.length;i++){
-      if(weeklyData[i].開立數===0 && cumPres[i]===cumPres[i-1]){
-        // 已是累積值不變，不需額外處理（累積加法本身就維持了）
-      }
-    }
-    // 找最後一個有新增量的位置，之後的週次都用該累積值
-    let lastValidP=0, lastValidE=0;
-    for(let i=0;i<weeklyData.length;i++){
-      if(weeklyData[i].開立數>0) lastValidP=cumPres[i];
-      else cumPres[i]=lastValidP;
-      if(weeklyData[i].執行數>0) lastValidE=cumExec[i];
-      else cumExec[i]=lastValidE;
-    }
+    // 累積值：逐週累加
+    const cumPres=[], cumExec=[];
+    let runP=0, runE=0;
+    weeklyData.forEach(d=>{
+      runP += d.開立數;
+      runE += d.執行數;
+      cumPres.push(runP);
+      cumExec.push(runE);
+    });
+    // X 軸標籤（weeks）可能比 weeklyData 多（填補週次），補齊長度
+    const finalRunP = cumPres[cumPres.length-1] || 0;
+    const finalRunE = cumExec[cumExec.length-1] || 0;
+    while(cumPres.length < weeks.length) cumPres.push(finalRunP);
+    while(cumExec.length < weeks.length) cumExec.push(finalRunE);
     const mkLine=(id,data,color,label)=>new Chart(document.getElementById(id).getContext('2d'),{
       type:'line',plugins:[lineLabelPlugin],
       data:{labels:weeks,datasets:[{
-        label,data,
+        label,
+        // 確保沒有 null/undefined，空週次用前一個值填補
+        data: data.map((v,i,arr)=> v != null ? v : (i>0 ? arr[i-1] : 0)),
         borderColor:color,
         backgroundColor:color+'28',
         pointRadius:5,pointBackgroundColor:color,pointBorderColor:'#fff',pointBorderWidth:2,
         tension:0,
-        fill:'origin',   // 明確填到 Y=0 基線
+        fill:'origin',
         borderWidth:2.5,
-        spanGaps:true    // 跨越空值保持連線
+        spanGaps:false
       }]},
       options:{
         responsive:true,maintainAspectRatio:false,
@@ -1639,62 +1637,82 @@ async function startPdfExport() {
   progressBar.style.width = '0%';
 
   try {
-    // 收集所有勾選圖表
-    // 策略：先切換到各頁籤讓 Chart.js 用正確尺寸渲染，再用 canvas.toDataURL() 取圖
     const selectedSections = [];
-
-    // 記錄目前顯示的 tab
     const tabNames = ['weekly','type','typeweekly','clinic'];
     const activeTabEl = document.querySelector('.tab-btn.active');
     const activeTabIdx = [...document.querySelectorAll('.tab-btn')].indexOf(activeTabEl);
 
-    // 依群組分批：同群組一起切換頁籤後擷取
-    for (const group of PDF_CHART_GROUPS) {
-      const chartsInGroup = group.charts.filter(c => pdfChecked.has(c.id));
-      if (!chartsInGroup.length) continue;
+    // 每個 pdf-id 對應：所在 tab、所在子 view（若有）、需要觸發的圖表模式
+    const CHART_CONTEXT = {
+      'weekly-pres': { tab:'tab-weekly' },
+      'weekly-exec': { tab:'tab-weekly' },
+      'cum-pres':    { tab:'tab-type', subViews:['type-line-view'], hideSubViews:['type-pie-view','type-hbar-view'], rebuildFn:()=>buildTypeCharts('line') },
+      'cum-exec':    { tab:'tab-type', subViews:['type-line-view'], hideSubViews:['type-pie-view','type-hbar-view'], rebuildFn:()=>buildTypeCharts('line') },
+      'pie-pres':    { tab:'tab-type', subViews:['type-pie-view'],  hideSubViews:['type-line-view','type-hbar-view'], rebuildFn:()=>buildTypeCharts('pie') },
+      'pie-exec':    { tab:'tab-type', subViews:['type-pie-view'],  hideSubViews:['type-line-view','type-hbar-view'], rebuildFn:()=>buildTypeCharts('pie') },
+      'hbar-type':   { tab:'tab-type', subViews:['type-hbar-view'], hideSubViews:['type-line-view','type-pie-view'],  rebuildFn:()=>buildTypeCharts('hbar') },
+      'hbar-rate':   { tab:'tab-type', subViews:['type-hbar-view'], hideSubViews:['type-line-view','type-pie-view'],  rebuildFn:()=>buildTypeCharts('hbar') },
+      'tw-0':    { tab:'tab-typeweekly', subViews:['tw-multi-view'], hideSubViews:['tw-hbar-view'], rebuildFn:()=>buildTypeWeeklyCharts('line') },
+      'tw-1':    { tab:'tab-typeweekly', subViews:['tw-multi-view'], hideSubViews:['tw-hbar-view'], rebuildFn:()=>buildTypeWeeklyCharts('line') },
+      'tw-2':    { tab:'tab-typeweekly', subViews:['tw-multi-view'], hideSubViews:['tw-hbar-view'], rebuildFn:()=>buildTypeWeeklyCharts('line') },
+      'tw-3':    { tab:'tab-typeweekly', subViews:['tw-multi-view'], hideSubViews:['tw-hbar-view'], rebuildFn:()=>buildTypeWeeklyCharts('line') },
+      'tw-hb-0': { tab:'tab-typeweekly', subViews:['tw-hbar-view'], hideSubViews:['tw-multi-view'], rebuildFn:()=>buildTypeWeeklyCharts('hbar') },
+      'tw-hb-1': { tab:'tab-typeweekly', subViews:['tw-hbar-view'], hideSubViews:['tw-multi-view'], rebuildFn:()=>buildTypeWeeklyCharts('hbar') },
+      'tw-hb-2': { tab:'tab-typeweekly', subViews:['tw-hbar-view'], hideSubViews:['tw-multi-view'], rebuildFn:()=>buildTypeWeeklyCharts('hbar') },
+      'tw-hb-3': { tab:'tab-typeweekly', subViews:['tw-hbar-view'], hideSubViews:['tw-multi-view'], rebuildFn:()=>buildTypeWeeklyCharts('hbar') },
+      'clinic-enroll': { tab:'tab-clinic', clinicContent:true },
+      'clinic-bar':    { tab:'tab-clinic', clinicContent:true },
+      'clinic-rate':   { tab:'tab-clinic', clinicContent:true },
+    };
 
-      // 切換到該群組的頁籤
-      const tabEl = document.getElementById(group.tabId);
-      if (tabEl) {
-        // 先讓所有 tab 隱藏，只顯示這個
+    // 依序處理每張勾選的圖表
+    const allChartIds = PDF_CHART_GROUPS.flatMap(g => g.charts.map(c => c.id)).filter(id => pdfChecked.has(id));
+
+    let lastTab = null, lastCtxKey = null;
+    for (const chartId of allChartIds) {
+      const ctx = CHART_CONTEXT[chartId];
+      if (!ctx) continue;
+      const ctxKey = ctx.tab + (ctx.subViews?.[0] || '');
+
+      // 只在需要切換時才切換，避免重複 rebuild
+      if (ctxKey !== lastCtxKey) {
+        // 隱藏所有 tab
         tabNames.forEach(t => document.getElementById('tab-'+t)?.classList.add('hidden'));
-        tabEl.classList.remove('hidden');
-
-        // 若是 type 群組，需確保正確的子 view 也顯示
-        if (group.groupId === 'type') {
-          const mode = currentChartType['type'];
-          ['type-line-view','type-pie-view','type-hbar-view'].forEach(v => document.getElementById(v)?.classList.add('hidden'));
-          if (mode === 'line') document.getElementById('type-line-view')?.classList.remove('hidden');
-          else if (mode === 'pie' || mode === 'doughnut') document.getElementById('type-pie-view')?.classList.remove('hidden');
-          else if (mode === 'hbar') document.getElementById('type-hbar-view')?.classList.remove('hidden');
+        // 顯示目標 tab
+        document.getElementById(ctx.tab)?.classList.remove('hidden');
+        // 處理子 view
+        if (ctx.subViews) {
+          ctx.hideSubViews?.forEach(v => document.getElementById(v)?.classList.add('hidden'));
+          ctx.subViews.forEach(v => document.getElementById(v)?.classList.remove('hidden'));
         }
-        if (group.groupId === 'typeweekly') {
-          const mode = currentChartType['typeweekly'];
-          ['tw-multi-view','tw-hbar-view'].forEach(v => document.getElementById(v)?.classList.add('hidden'));
-          if (mode === 'hbar') document.getElementById('tw-hbar-view')?.classList.remove('hidden');
-          else document.getElementById('tw-multi-view')?.classList.remove('hidden');
+        // 診所分析需要顯示 clinic-content
+        if (ctx.clinicContent) {
+          document.getElementById('clinic-no-data')?.classList.add('hidden');
+          document.getElementById('clinic-content')?.classList.remove('hidden');
         }
-
-        // 等 Chart.js resize 完成
-        await new Promise(r => setTimeout(r, 200));
+        // 強制重建圖表（確保 canvas 有正確尺寸）
+        if (ctx.rebuildFn) ctx.rebuildFn();
+        // 等待渲染
+        await new Promise(r => setTimeout(r, 300));
+        lastCtxKey = ctxKey;
       }
 
-      for (const chart of chartsInGroup) {
-        const sectionEl = document.querySelector(`[data-pdf-id="${chart.id}"]`);
-        if (!sectionEl) continue;
-        const canvas = sectionEl.querySelector('canvas');
-        if (!canvas || canvas.width === 0 || canvas.height === 0) continue;
-        const titleEl = sectionEl.querySelector('h2');
-        const title = titleEl ? titleEl.textContent.trim() : chart.label;
-        const imgDataUrl = canvas.toDataURL('image/png');
-        selectedSections.push({ imgDataUrl, title, id: chart.id });
-      }
+      const sectionEl = document.querySelector(`[data-pdf-id="${chartId}"]`);
+      if (!sectionEl) continue;
+      const canvas = sectionEl.querySelector('canvas');
+      if (!canvas || canvas.width === 0 || canvas.height === 0) continue;
+      const titleEl = sectionEl.querySelector('h2');
+      const title = titleEl ? titleEl.textContent.trim() : chartId;
+      selectedSections.push({ imgDataUrl: canvas.toDataURL('image/png'), title, id: chartId });
     }
 
     // 還原原本的 tab
     tabNames.forEach(t => document.getElementById('tab-'+t)?.classList.add('hidden'));
     const origTabId = 'tab-' + (tabNames[activeTabIdx] || 'weekly');
     document.getElementById(origTabId)?.classList.remove('hidden');
+    // 還原子 view 狀態
+    buildTypeCharts(currentChartType['type']);
+    buildTypeWeeklyCharts(currentChartType['typeweekly']);
 
     if (selectedSections.length === 0) {
       alert('所選圖表目前無資料，請先上傳 Excel 再匯出。');
