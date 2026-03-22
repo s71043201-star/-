@@ -7,6 +7,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<!-- PDF 相關套件 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700;800&display=swap');
 
@@ -108,6 +111,168 @@ header p { font-size: 0.86rem; opacity: 0.88; margin-top: 5px; letter-spacing: 0
 .upload-status { font-size: 0.81rem; color: var(--teal); font-weight: 600; max-width: 420px; }
 .upload-status.error { color: #c53030; }
 .upload-hint { font-size: 0.77rem; color: var(--text-muted); }
+
+/* ══════════════════════════════════
+   ★ PDF 工具列
+══════════════════════════════════ */
+#pdf-toolbar {
+  background: #f8fffe;
+  border-bottom: 2px solid var(--border);
+  padding: 10px 36px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+#pdf-toolbar .pdf-label {
+  font-size: 0.85rem; font-weight: 700; color: var(--text-muted); white-space: nowrap;
+}
+#pdf-export-btn {
+  display: flex; align-items: center; gap: 7px;
+  padding: 8px 20px; border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, #2aac8a, #1a9fbe);
+  color: white; font-size: 0.88rem; font-family: inherit;
+  font-weight: 700; border: none; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(26,159,190,0.30);
+  transition: all 0.18s; white-space: nowrap;
+}
+#pdf-export-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(26,159,190,0.40); }
+#pdf-export-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+#pdf-export-btn .pdf-icon { font-size: 1rem; }
+
+/* ── PDF 勾選面板 (Modal) ── */
+#pdf-modal-overlay {
+  position: fixed; inset: 0; background: rgba(10,30,24,0.55);
+  z-index: 9000; display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(3px);
+  opacity: 0; pointer-events: none; transition: opacity 0.2s;
+}
+#pdf-modal-overlay.open { opacity: 1; pointer-events: all; }
+
+#pdf-modal {
+  background: var(--surface); border-radius: var(--radius);
+  box-shadow: 0 20px 60px rgba(10,30,24,0.35);
+  width: 680px; max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 60px); overflow: hidden;
+  display: flex; flex-direction: column;
+  transform: translateY(16px) scale(0.98); transition: transform 0.2s;
+}
+#pdf-modal-overlay.open #pdf-modal { transform: translateY(0) scale(1); }
+
+.pdf-modal-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1.5px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  background: linear-gradient(135deg, #f0fbf7, #e8f6fd);
+}
+.pdf-modal-header h3 {
+  font-size: 1.05rem; font-weight: 800; color: var(--text);
+  display: flex; align-items: center; gap: 8px;
+}
+.pdf-modal-close {
+  width: 30px; height: 30px; border-radius: 50%;
+  border: 1.5px solid var(--border); background: var(--surface);
+  color: var(--text-muted); font-size: 1.1rem; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.pdf-modal-close:hover { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
+
+.pdf-modal-body {
+  padding: 16px 24px; overflow-y: auto; flex: 1;
+}
+
+/* 圖表群組 */
+.pdf-group { margin-bottom: 18px; }
+.pdf-group-title {
+  font-size: 0.78rem; font-weight: 700; color: var(--teal);
+  letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 4px 0 8px; border-bottom: 1px solid var(--border);
+  margin-bottom: 10px;
+  display: flex; align-items: center; gap: 6px;
+}
+.pdf-check-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+}
+.pdf-check-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 12px; border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border); cursor: pointer;
+  transition: all 0.15s; background: #fafffe;
+  user-select: none;
+}
+.pdf-check-item:hover { border-color: #7dd4b8; background: #f0fbf7; }
+.pdf-check-item.checked { border-color: var(--teal); background: #e8f8f2; }
+.pdf-check-item input[type="checkbox"] { display: none; }
+.pdf-check-box {
+  width: 18px; height: 18px; border-radius: 5px;
+  border: 2px solid #b3d6cc; background: white;
+  flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s; font-size: 11px; color: white;
+}
+.pdf-check-item.checked .pdf-check-box {
+  background: var(--teal); border-color: var(--teal);
+}
+.pdf-check-item.checked .pdf-check-box::after { content: '✓'; }
+.pdf-check-text { font-size: 0.83rem; color: var(--text); font-weight: 600; line-height: 1.3; }
+.pdf-check-text small { font-size: 0.72rem; color: var(--text-muted); font-weight: 400; display: block; }
+
+/* 全選 / 全不選 */
+.pdf-select-all-row {
+  display: flex; gap: 8px; margin-bottom: 14px;
+}
+.pdf-sel-btn {
+  padding: 4px 12px; border-radius: 20px;
+  border: 1.5px solid var(--border); background: var(--surface);
+  color: var(--text-muted); font-size: 0.78rem; font-family: inherit;
+  cursor: pointer; transition: all 0.15s; font-weight: 600;
+}
+.pdf-sel-btn:hover { border-color: var(--teal); color: var(--teal); background: #f0fbf7; }
+
+.pdf-modal-footer {
+  padding: 14px 24px;
+  border-top: 1.5px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: #f8fffe;
+}
+.pdf-selected-count { font-size: 0.82rem; color: var(--text-muted); font-weight: 600; }
+.pdf-selected-count span { color: var(--teal); font-size: 1rem; }
+
+.pdf-confirm-btn {
+  display: flex; align-items: center; gap: 7px;
+  padding: 9px 22px; border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, #2aac8a, #1a9fbe);
+  color: white; font-size: 0.9rem; font-family: inherit;
+  font-weight: 700; border: none; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(26,159,190,0.30);
+  transition: all 0.18s;
+}
+.pdf-confirm-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(26,159,190,0.40); }
+.pdf-confirm-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+
+/* PDF 進度遮罩 */
+#pdf-progress-overlay {
+  position: fixed; inset: 0; background: rgba(10,30,24,0.7);
+  z-index: 9999; display: none; flex-direction: column;
+  align-items: center; justify-content: center; gap: 18px;
+  backdrop-filter: blur(4px);
+}
+#pdf-progress-overlay.show { display: flex; }
+.pdf-progress-box {
+  background: white; border-radius: var(--radius);
+  padding: 32px 40px; text-align: center; min-width: 300px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+.pdf-progress-box .spin {
+  font-size: 2.5rem; animation: spin 1s linear infinite; display: block; margin-bottom: 14px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.pdf-progress-box p { font-size: 0.95rem; color: var(--text); font-weight: 600; }
+.pdf-progress-box small { font-size: 0.8rem; color: var(--text-muted); margin-top: 6px; display: block; }
+.pdf-prog-bar-wrap {
+  margin-top: 14px; height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden;
+}
+.pdf-prog-bar-fill {
+  height: 100%; background: linear-gradient(90deg, #2aac8a, #1a9fbe);
+  border-radius: 3px; transition: width 0.3s ease; width: 0%;
+}
 
 /* ── 摘要卡片 ── */
 .summary-grid {
@@ -223,22 +388,15 @@ header p { font-size: 0.86rem; opacity: 0.88; margin-top: 5px; letter-spacing: 0
 .dl-btn:hover { background: #e0f7ef; border-color: var(--teal); }
 
 /* ── 診所排名表格 ── */
-.clinic-table-wrap {
-  overflow-x: auto; margin-top: 6px;
-}
-.clinic-table {
-  width: 100%; border-collapse: collapse; font-size: 0.85rem;
-}
+.clinic-table-wrap { overflow-x: auto; margin-top: 6px; }
+.clinic-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
 .clinic-table th {
   background: #f0fbf7; color: var(--teal); font-weight: 700;
   padding: 10px 14px; text-align: left; border-bottom: 2px solid var(--border);
   white-space: nowrap;
 }
 .clinic-table th.num { text-align: right; }
-.clinic-table td {
-  padding: 9px 14px; border-bottom: 1px solid var(--border);
-  vertical-align: middle; color: var(--text);
-}
+.clinic-table td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; color: var(--text); }
 .clinic-table td.num { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
 .clinic-table tr:hover td { background: #f5fdf9; }
 .clinic-table tr:last-child td { border-bottom: none; }
@@ -251,18 +409,11 @@ header p { font-size: 0.86rem; opacity: 0.88; margin-top: 5px; letter-spacing: 0
 .rank-badge.r3 { background: #fed7aa; color: #92400e; }
 .rank-badge.rn { background: #f0fdf4; color: #166534; }
 .rate-bar-cell { min-width: 120px; }
-.rate-bar-bg {
-  background: #e8f8f2; border-radius: 4px; height: 8px; overflow: hidden;
-}
-.rate-bar-fill {
-  height: 100%; border-radius: 4px;
-  background: linear-gradient(90deg, #2aac8a, #1a9fbe);
-}
+.rate-bar-bg { background: #e8f8f2; border-radius: 4px; height: 8px; overflow: hidden; }
+.rate-bar-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #2aac8a, #1a9fbe); }
 
 /* ── 診所排序控制 ── */
-.clinic-sort-bar {
-  padding: 14px 36px 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-}
+.clinic-sort-bar { padding: 14px 36px 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .clinic-sort-bar .ct-label { font-size: 0.8rem; font-weight: 700; color: var(--text-muted); }
 
 /* ── Footer ── */
@@ -282,6 +433,8 @@ footer {
   header { padding: 20px; }
   #cloud-bar { padding: 8px 16px; }
   .clinic-sort-bar { padding: 12px 16px 0; }
+  #pdf-toolbar { padding: 10px 16px; }
+  .pdf-check-grid { grid-template-columns: 1fr; }
 }
 
 .hidden { display: none; }
@@ -318,6 +471,17 @@ footer {
   <span class="upload-hint">欄位需包含：處方類型、開立日期、診所名稱（選填）、執行日期或執行狀態</span>
 </div>
 
+<!-- ══════════════════════════════════
+     ★ PDF 工具列
+══════════════════════════════════ -->
+<div id="pdf-toolbar">
+  <span class="pdf-label">📄 匯出報告：</span>
+  <button id="pdf-export-btn" onclick="openPdfModal()">
+    <span class="pdf-icon">📑</span> 選擇圖表並匯出 PDF
+  </button>
+  <span style="font-size:0.78rem;color:var(--text-muted);">勾選想要的圖表，每頁自動放 2 張，合併下載</span>
+</div>
+
 <!-- 摘要卡片（5 張） -->
 <div class="summary-grid">
   <div class="card blue">  <span class="icon">📁</span><div class="val" id="sumTotal">—</div><div class="lbl">總開立數</div></div>
@@ -344,8 +508,8 @@ footer {
     <button class="ct-btn" onclick="setChartType('weekly','line',this)"><span>📈</span> 折線圖</button>
     <button class="ct-btn" onclick="setChartType('weekly','area',this)"><span>🏔️</span> 面積圖</button>
   </div>
-  <div class="chart-section"><div class="chart-header"><h2 id="w1-title">每週處方開立數</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap"><canvas id="weeklyBarChart"></canvas></div></div>
-  <div class="chart-section"><div class="chart-header"><h2 id="w2-title">每週處方執行數</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap"><canvas id="weeklyExecChart"></canvas></div></div>
+  <div class="chart-section" data-pdf-id="weekly-pres" data-pdf-label="每週處方開立數"><div class="chart-header"><h2 id="w1-title">每週處方開立數</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap"><canvas id="weeklyBarChart"></canvas></div></div>
+  <div class="chart-section" data-pdf-id="weekly-exec" data-pdf-label="每週處方執行數"><div class="chart-header"><h2 id="w2-title">每週處方執行數</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap"><canvas id="weeklyExecChart"></canvas></div></div>
 </div>
 
 <!-- ═══ TAB 2 ═══ -->
@@ -358,18 +522,18 @@ footer {
     <button class="ct-btn" onclick="setChartType('type','hbar',this)"><span>📉</span> 橫條對比</button>
   </div>
   <div id="type-line-view">
-    <div class="chart-section"><div class="chart-header"><h2>處方開立數累積趨勢（依週）</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap"><canvas id="cumPrescribeChart"></canvas></div></div>
-    <div class="chart-section"><div class="chart-header"><h2>執行數累積趨勢（依週）</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap"><canvas id="cumExecChart"></canvas></div></div>
+    <div class="chart-section" data-pdf-id="cum-pres" data-pdf-label="處方開立數累積趨勢"><div class="chart-header"><h2>處方開立數累積趨勢（依週）</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap"><canvas id="cumPrescribeChart"></canvas></div></div>
+    <div class="chart-section" data-pdf-id="cum-exec" data-pdf-label="執行數累積趨勢"><div class="chart-header"><h2>執行數累積趨勢（依週）</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap"><canvas id="cumExecChart"></canvas></div></div>
   </div>
   <div id="type-pie-view" class="hidden">
     <div class="side-by-side">
-      <div class="chart-section"><div class="chart-header"><h2>各類型開立數佔比</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap"><canvas id="piePresChart"></canvas></div></div>
-      <div class="chart-section"><div class="chart-header"><h2>各類型執行數佔比</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap"><canvas id="pieExecChart"></canvas></div></div>
+      <div class="chart-section" data-pdf-id="pie-pres" data-pdf-label="各類型開立數佔比"><div class="chart-header"><h2>各類型開立數佔比</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap"><canvas id="piePresChart"></canvas></div></div>
+      <div class="chart-section" data-pdf-id="pie-exec" data-pdf-label="各類型執行數佔比"><div class="chart-header"><h2>各類型執行數佔比</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap"><canvas id="pieExecChart"></canvas></div></div>
     </div>
   </div>
   <div id="type-hbar-view" class="hidden">
-    <div class="chart-section"><div class="chart-header"><h2>各類型開立數 vs 執行數（橫條對比）</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:260px"><canvas id="hbarTypeChart"></canvas></div></div>
-    <div class="chart-section"><div class="chart-header"><h2>各類型執行率（%）</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:200px"><canvas id="hbarRateChart"></canvas></div></div>
+    <div class="chart-section" data-pdf-id="hbar-type" data-pdf-label="各類型開立數 vs 執行數"><div class="chart-header"><h2>各類型開立數 vs 執行數（橫條對比）</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:260px"><canvas id="hbarTypeChart"></canvas></div></div>
+    <div class="chart-section" data-pdf-id="hbar-rate" data-pdf-label="各類型執行率（%）"><div class="chart-header"><h2>各類型執行率（%）</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:200px"><canvas id="hbarRateChart"></canvas></div></div>
   </div>
 </div>
 
@@ -384,35 +548,30 @@ footer {
   </div>
   <div id="tw-multi-view">
     <div class="type-grid">
-      <div class="chart-section"><div class="chart-header"><h2>情緒調適處方</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:260px"><canvas id="twDetail0"></canvas></div></div>
-      <div class="chart-section"><div class="chart-header"><h2>營養處方</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:260px"><canvas id="twDetail1"></canvas></div></div>
-      <div class="chart-section"><div class="chart-header"><h2>社會處方</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:260px"><canvas id="twDetail2"></canvas></div></div>
-      <div class="chart-section"><div class="chart-header"><h2>運動處方</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:260px"><canvas id="twDetail3"></canvas></div></div>
+      <div class="chart-section" data-pdf-id="tw-0" data-pdf-label="情緒調適處方週趨勢"><div class="chart-header"><h2>情緒調適處方</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:260px"><canvas id="twDetail0"></canvas></div></div>
+      <div class="chart-section" data-pdf-id="tw-1" data-pdf-label="營養處方週趨勢"><div class="chart-header"><h2>營養處方</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:260px"><canvas id="twDetail1"></canvas></div></div>
+      <div class="chart-section" data-pdf-id="tw-2" data-pdf-label="社會處方週趨勢"><div class="chart-header"><h2>社會處方</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:260px"><canvas id="twDetail2"></canvas></div></div>
+      <div class="chart-section" data-pdf-id="tw-3" data-pdf-label="運動處方週趨勢"><div class="chart-header"><h2>運動處方</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:260px"><canvas id="twDetail3"></canvas></div></div>
     </div>
   </div>
   <div id="tw-hbar-view" class="hidden">
     <div class="type-grid">
-      <div class="chart-section"><div class="chart-header"><h2>情緒調適處方</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:260px"><canvas id="twHbar0"></canvas></div></div>
-      <div class="chart-section"><div class="chart-header"><h2>營養處方</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:260px"><canvas id="twHbar1"></canvas></div></div>
-      <div class="chart-section"><div class="chart-header"><h2>社會處方</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:260px"><canvas id="twHbar2"></canvas></div></div>
-      <div class="chart-section"><div class="chart-header"><h2>運動處方</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:260px"><canvas id="twHbar3"></canvas></div></div>
+      <div class="chart-section" data-pdf-id="tw-hb-0" data-pdf-label="情緒調適處方（橫條）"><div class="chart-header"><h2>情緒調適處方</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:260px"><canvas id="twHbar0"></canvas></div></div>
+      <div class="chart-section" data-pdf-id="tw-hb-1" data-pdf-label="營養處方（橫條）"><div class="chart-header"><h2>營養處方</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:260px"><canvas id="twHbar1"></canvas></div></div>
+      <div class="chart-section" data-pdf-id="tw-hb-2" data-pdf-label="社會處方（橫條）"><div class="chart-header"><h2>社會處方</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:260px"><canvas id="twHbar2"></canvas></div></div>
+      <div class="chart-section" data-pdf-id="tw-hb-3" data-pdf-label="運動處方（橫條）"><div class="chart-header"><h2>運動處方</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div><div class="chart-wrap" style="height:260px"><canvas id="twHbar3"></canvas></div></div>
     </div>
   </div>
 </div>
 
 <!-- ═══ TAB 4：診所分析 ═══ -->
 <div id="tab-clinic" class="hidden">
-
-  <!-- 無診所欄位提示 -->
   <div id="clinic-no-data" class="chart-section" style="text-align:center;color:var(--text-muted);padding:40px;">
     <div style="font-size:2.5rem;margin-bottom:12px;">🏥</div>
     <div style="font-weight:700;font-size:1rem;margin-bottom:8px;">尚無診所資料</div>
     <div style="font-size:0.85rem;">請確認 Excel 中有「診所名稱」相關欄位（例如：診所、院所、診所名稱），並重新上傳。</div>
   </div>
-
   <div id="clinic-content" class="hidden">
-
-    <!-- 排序控制 -->
     <div class="clinic-sort-bar">
       <span class="ct-label">排序依據：</span>
       <button class="ct-btn active" onclick="setClinicSort('prescribe',this)"><span>📋</span> 開立數↓</button>
@@ -420,67 +579,75 @@ footer {
       <button class="ct-btn" onclick="setClinicSort('rate',this)"><span>📈</span> 比率↓</button>
       <button class="ct-btn" onclick="setClinicSort('name',this)"><span>🔤</span> 名稱↑</button>
     </div>
-
-    <!-- ① 選課人次橫條圖 -->
-    <div class="chart-section">
-      <div class="chart-header">
-        <h2>各診所選課或執行筆數（去重）</h2>
-        <button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button>
-      </div>
-      <div class="chart-wrap" id="clinicEnrollWrap" style="height:360px">
-        <canvas id="clinicEnrollChart"></canvas>
-      </div>
+    <div class="chart-section" data-pdf-id="clinic-enroll" data-pdf-label="各診所選課或執行筆數">
+      <div class="chart-header"><h2>各診所選課或執行筆數（去重）</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div>
+      <div class="chart-wrap" id="clinicEnrollWrap" style="height:360px"><canvas id="clinicEnrollChart"></canvas></div>
     </div>
-
-    <!-- ② 開立 vs 執行橫條對比圖 -->
-    <div class="chart-section">
-      <div class="chart-header">
-        <h2>各診所開立數 vs 選課或執行筆數</h2>
-        <button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button>
-      </div>
-      <div class="chart-wrap" id="clinicBarWrap" style="height:360px">
-        <canvas id="clinicBarChart"></canvas>
-      </div>
+    <div class="chart-section" data-pdf-id="clinic-bar" data-pdf-label="各診所開立數 vs 執行筆數">
+      <div class="chart-header"><h2>各診所開立數 vs 選課或執行筆數</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div>
+      <div class="chart-wrap" id="clinicBarWrap" style="height:360px"><canvas id="clinicBarChart"></canvas></div>
     </div>
-
-    <!-- ③ 執行率橫條圖 -->
-    <div class="chart-section">
-      <div class="chart-header">
-        <h2>各診所選課或執行比率（%）</h2>
-        <button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button>
-      </div>
-      <div class="chart-wrap" id="clinicRateWrap" style="height:360px">
-        <canvas id="clinicRateChart"></canvas>
-      </div>
+    <div class="chart-section" data-pdf-id="clinic-rate" data-pdf-label="各診所選課或執行比率（%）">
+      <div class="chart-header"><h2>各診所選課或執行比率（%）</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div>
+      <div class="chart-wrap" id="clinicRateWrap" style="height:360px"><canvas id="clinicRateChart"></canvas></div>
     </div>
-
-    <!-- 詳細數字表格 -->
     <div class="chart-section">
-      <div class="chart-header">
-        <h2>各診所詳細統計表</h2>
-        <button class="dl-btn" onclick="exportClinicTable()">↓ 匯出 Excel</button>
-      </div>
+      <div class="chart-header"><h2>各診所詳細統計表</h2><button class="dl-btn" onclick="exportClinicTable()">↓ 匯出 Excel</button></div>
       <div class="clinic-table-wrap">
         <table class="clinic-table" id="clinicTable">
           <thead>
             <tr>
-              <th style="width:40px;">排名</th>
-              <th>診所名稱</th>
-              <th class="num">開立筆數</th>
-              <th class="num">選課或執行</th>
-              <th class="num">比率</th>
-              <th style="min-width:130px;">比率視覺</th>
+              <th style="width:40px;">排名</th><th>診所名稱</th>
+              <th class="num">開立筆數</th><th class="num">選課或執行</th>
+              <th class="num">比率</th><th style="min-width:130px;">比率視覺</th>
             </tr>
           </thead>
           <tbody id="clinicTableBody"></tbody>
         </table>
       </div>
     </div>
-
-  </div><!-- /clinic-content -->
-</div><!-- /tab-clinic -->
+  </div>
+</div>
 
 <footer>健康處方開立統計儀表板 &nbsp;·&nbsp; ⬡ 資料儲存於 Supabase &nbsp;·&nbsp; ◈ 圖表由 Chart.js 製作</footer>
+
+<!-- ══════════════════════════════════
+     ★ PDF Modal
+══════════════════════════════════ -->
+<div id="pdf-modal-overlay" onclick="closePdfModalOutside(event)">
+  <div id="pdf-modal">
+    <div class="pdf-modal-header">
+      <h3>📑 選擇要匯出的圖表</h3>
+      <button class="pdf-modal-close" onclick="closePdfModal()">✕</button>
+    </div>
+    <div class="pdf-modal-body">
+      <div class="pdf-select-all-row">
+        <button class="pdf-sel-btn" onclick="pdfSelectAll(true)">✅ 全選</button>
+        <button class="pdf-sel-btn" onclick="pdfSelectAll(false)">☐ 全不選</button>
+        <button class="pdf-sel-btn" onclick="pdfSelectVisible()">👁 只選目前頁籤</button>
+      </div>
+      <div id="pdf-checklist"></div>
+    </div>
+    <div class="pdf-modal-footer">
+      <div class="pdf-selected-count">已選 <span id="pdf-sel-count">0</span> 張圖表</div>
+      <button class="pdf-confirm-btn" id="pdf-confirm-btn" onclick="startPdfExport()">
+        📥 開始匯出 PDF
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- PDF 進度遮罩 -->
+<div id="pdf-progress-overlay">
+  <div class="pdf-progress-box">
+    <span class="spin">⚙️</span>
+    <p id="pdf-progress-msg">準備中…</p>
+    <small id="pdf-progress-sub">請稍候，正在擷取圖表</small>
+    <div class="pdf-prog-bar-wrap">
+      <div class="pdf-prog-bar-fill" id="pdf-prog-bar"></div>
+    </div>
+  </div>
+</div>
 
 <script>
 // ══════════════════════════════════════════════
@@ -505,13 +672,7 @@ if (isConfigured) {
 const TYPE_COLORS   = ['#8fba2e','#2aac8a','#1a9fbe','#1a7ea0'];
 const TYPE_COLORS_A = ['rgba(143,186,46,0.75)','rgba(42,172,138,0.75)','rgba(26,159,190,0.75)','rgba(26,126,160,0.75)'];
 const PIE_COLORS    = ['#8fba2e','#2aac8a','#1a9fbe','#1a7ea0'];
-// 診所圖表專用色票（最多支援 20 間診所）
-const CLINIC_COLORS = [
-  '#2aac8a','#1a9fbe','#8fba2e','#1a7ea0','#e8930a',
-  '#7c3aed','#db2777','#0891b2','#65a30d','#b45309',
-  '#6366f1','#14b8a6','#f59e0b','#ef4444','#84cc16',
-  '#06b6d4','#8b5cf6','#f97316','#10b981','#3b82f6'
-];
+const CLINIC_COLORS = ['#2aac8a','#1a9fbe','#8fba2e','#1a7ea0','#e8930a','#7c3aed','#db2777','#0891b2','#65a30d','#b45309','#6366f1','#14b8a6','#f59e0b','#ef4444','#84cc16','#06b6d4','#8b5cf6','#f97316','#10b981','#3b82f6'];
 const defaultFont = {family:"'Microsoft JhengHei','Noto Sans TC',sans-serif", size:12};
 const chartInstances = {};
 const currentChartType = {weekly:'bar', type:'line', typeweekly:'line'};
@@ -574,7 +735,7 @@ async function saveToCloud(payload) {
     weekly_data:     payload.weeklyData,
     type_stats:      payload.typeStats,
     type_weekly_raw: payload.typeWeeklyRaw,
-    clinic_stats:    payload.clinicStats,   // ← 新增
+    clinic_stats:    payload.clinicStats,
     date_range:      payload.dateRange,
     file_name:       payload.fileName,
     uploaded_at:     new Date().toISOString()
@@ -844,7 +1005,6 @@ function getSortedClinicStats() {
 
 function buildClinicCharts() {
   ['clinicEnroll','clinicBar','clinicRate'].forEach(k=>destroyChart(k));
-
   if (!clinicStats.length) {
     document.getElementById('clinic-no-data').classList.remove('hidden');
     document.getElementById('clinic-content').classList.add('hidden');
@@ -852,20 +1012,15 @@ function buildClinicCharts() {
   }
   document.getElementById('clinic-no-data').classList.add('hidden');
   document.getElementById('clinic-content').classList.remove('hidden');
-
   const sorted     = getSortedClinicStats();
   const names      = sorted.map(d=>d.診所名稱);
   const presData   = sorted.map(d=>d.開立數);
   const enrollData = sorted.map(d=>d.選課或執行);
   const rateData   = sorted.map(d=>d.比率);
-
-  // 動態高度（每間診所 36px，至少 320px）
   const dynH = Math.max(320, names.length * 36);
   document.getElementById('clinicEnrollWrap').style.height = dynH + 'px';
   document.getElementById('clinicBarWrap').style.height    = dynH + 'px';
   document.getElementById('clinicRateWrap').style.height   = Math.max(280, names.length * 32) + 'px';
-
-  // ① 選課人次橫條圖
   const enrollColors = enrollData.map(v => {
     const max = Math.max(...enrollData, 1);
     const alpha = 0.4 + (v / max) * 0.5;
@@ -873,81 +1028,20 @@ function buildClinicCharts() {
   });
   chartInstances['clinicEnroll'] = new Chart(document.getElementById('clinicEnrollChart').getContext('2d'), {
     type: 'bar', plugins: [barLabelPlugin],
-    data: {
-      labels: names,
-      datasets: [{
-        label: '選課人次', data: enrollData,
-        backgroundColor: enrollColors,
-        borderColor: '#7c3aed', borderWidth: 1, borderRadius: 4
-      }]
-    },
-    options: {
-      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-      layout: { padding: { right: 52 } },
-      plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: c => ` 選課或執行：${c.parsed.x} 筆` } }
-      },
-      scales: {
-        x: { ticks:{font:defaultFont}, beginAtZero:true, grid:{color:'#e2e8f0'} },
-        y: { ticks:{font:{...defaultFont, size:11}}, grid:{display:false} }
-      }
-    }
+    data: { labels: names, datasets: [{ label: '選課人次', data: enrollData, backgroundColor: enrollColors, borderColor: '#7c3aed', borderWidth: 1, borderRadius: 4 }] },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, layout: { padding: { right: 52 } }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ` 選課或執行：${c.parsed.x} 筆` } } }, scales: { x: { ticks:{font:defaultFont}, beginAtZero:true, grid:{color:'#e2e8f0'} }, y: { ticks:{font:{...defaultFont, size:11}}, grid:{display:false} } } }
   });
-
-  // ② 開立 vs 執行橫條對比圖
   chartInstances['clinicBar'] = new Chart(document.getElementById('clinicBarChart').getContext('2d'), {
     type: 'bar', plugins: [barLabelPlugin],
-    data: {
-      labels: names,
-      datasets: [
-        { label:'開立數',     data:presData,   backgroundColor:'rgba(42,172,138,0.82)', borderRadius:4 },
-        { label:'選課或執行', data:enrollData, backgroundColor:'rgba(124,58,237,0.75)', borderRadius:4 }
-      ]
-    },
-    options: {
-      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-      layout: { padding: { right: 52 } },
-      plugins: {
-        legend: { position:'top', labels:{font:defaultFont} },
-        tooltip: { callbacks: { label: c => ` ${c.dataset.label}：${c.parsed.x} 筆` } }
-      },
-      scales: {
-        x: { ticks:{font:defaultFont}, beginAtZero:true, grid:{color:'#e2e8f0'} },
-        y: { ticks:{font:{...defaultFont, size:11}}, grid:{display:false} }
-      }
-    }
+    data: { labels: names, datasets: [ { label:'開立數', data:presData, backgroundColor:'rgba(42,172,138,0.82)', borderRadius:4 }, { label:'選課或執行', data:enrollData, backgroundColor:'rgba(124,58,237,0.75)', borderRadius:4 } ] },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, layout: { padding: { right: 52 } }, plugins: { legend: { position:'top', labels:{font:defaultFont} }, tooltip: { callbacks: { label: c => ` ${c.dataset.label}：${c.parsed.x} 筆` } } }, scales: { x: { ticks:{font:defaultFont}, beginAtZero:true, grid:{color:'#e2e8f0'} }, y: { ticks:{font:{...defaultFont, size:11}}, grid:{display:false} } } }
   });
-
-  // ③ 執行率橫條圖（顏色深淺）
-  const bgColors = rateData.map(r => {
-    const alpha = 0.35 + (r / 100) * 0.55;
-    return `rgba(42,172,138,${alpha.toFixed(2)})`;
-  });
+  const bgColors = rateData.map(r => { const alpha = 0.35 + (r / 100) * 0.55; return `rgba(42,172,138,${alpha.toFixed(2)})`; });
   chartInstances['clinicRate'] = new Chart(document.getElementById('clinicRateChart').getContext('2d'), {
     type: 'bar', plugins: [barLabelPlugin],
-    data: {
-      labels: names,
-      datasets: [{
-        label: '執行率%', data: rateData,
-        backgroundColor: bgColors,
-        borderColor: '#2aac8a', borderWidth: 1, borderRadius: 4
-      }]
-    },
-    options: {
-      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-      layout: { padding: { right: 60 } },
-      plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: c => ` 選課或執行比率：${c.parsed.x}%` } }
-      },
-      scales: {
-        x: { ticks:{font:defaultFont, callback:v=>v+'%'}, max:100, beginAtZero:true, grid:{color:'#e2e8f0'} },
-        y: { ticks:{font:{...defaultFont, size:11}}, grid:{display:false} }
-      }
-    }
+    data: { labels: names, datasets: [{ label: '執行率%', data: rateData, backgroundColor: bgColors, borderColor: '#2aac8a', borderWidth: 1, borderRadius: 4 }] },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, layout: { padding: { right: 60 } }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ` 選課或執行比率：${c.parsed.x}%` } } }, scales: { x: { ticks:{font:defaultFont, callback:v=>v+'%'}, max:100, beginAtZero:true, grid:{color:'#e2e8f0'} }, y: { ticks:{font:{...defaultFont, size:11}}, grid:{display:false} } } }
   });
-
   buildClinicTable(sorted);
 }
 
@@ -964,11 +1058,7 @@ function buildClinicTable(sorted) {
       <td class="num">${row.開立數.toLocaleString()}</td>
       <td class="num" style="color:#6d28d9;font-weight:700;">${row.選課或執行.toLocaleString()}</td>
       <td class="num" style="color:#6d28d9;">${row.比率}%</td>
-      <td class="rate-bar-cell">
-        <div class="rate-bar-bg">
-          <div class="rate-bar-fill" style="width:${row.比率}%"></div>
-        </div>
-      </td>
+      <td class="rate-bar-cell"><div class="rate-bar-bg"><div class="rate-bar-fill" style="width:${row.比率}%"></div></div></td>
     `;
     tbody.appendChild(tr);
   });
@@ -981,14 +1071,11 @@ function setClinicSort(sort, btn) {
   buildClinicCharts();
 }
 
-// ── 匯出診所統計 Excel ──
 function exportClinicTable() {
   if (!clinicStats.length) { alert('尚無診所資料'); return; }
   const sorted = getSortedClinicStats();
   const wsData = [['排名','診所名稱','開立筆數','選課或執行筆數','比率(%)']];
-  sorted.forEach((row, i) => {
-    wsData.push([i+1, row.診所名稱, row.開立數, row.選課或執行, row.比率]);
-  });
+  sorted.forEach((row, i) => { wsData.push([i+1, row.診所名稱, row.開立數, row.選課或執行, row.比率]); });
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(wsData);
   ws['!cols'] = [{wch:6},{wch:24},{wch:10},{wch:14},{wch:10}];
@@ -1045,43 +1132,32 @@ function parseExcel(file){
         const rows = XLSX.utils.sheet_to_json(ws,{defval:null});
         if(!rows.length){reject('Excel 檔案內無資料');return;}
         const headers = Object.keys(rows[0]);
-        // 精確比對優先，避免「執行處方」被「執行」模糊匹配吃掉
         const colType   = detectCol(headers,['處方類型','類型'],true)   || detectCol(headers,['type','Type']);
         const colPresc  = detectCol(headers,['開立日期時間','開立日期','開立時間'],true) || detectCol(headers,['prescribe','Prescribe']);
-        const colExecD  = detectCol(headers,['執行日期'],true);                        // 有值代表已執行
+        const colExecD  = detectCol(headers,['執行日期'],true);
         const colExecS  = detectCol(headers,['執行處方'],true)          || detectCol(headers,['執行狀態','是否執行'],true) || detectCol(headers,['status','Status']);
         const colEnroll = detectCol(headers,['是否選課'],true);
         const colClinic = detectCol(headers,['開立診所','診所名稱','診所','院所名稱','院所'],true) || detectCol(headers,['clinic','Clinic','醫療院所','機構名稱']);
         if(!colType||!colPresc){reject(`找不到必要欄位。\n偵測到：${headers.join('、')}\n需要：處方類型、開立日期`);return;}
-
         const weekMap={},typeWeekMap={},typeMapTotal={};
-        // ★ 診所統計 map
         const clinicMap = {};
         let minDate=null,maxDate=null;
-
         rows.forEach(row=>{
           const pd=toDate(row[colPresc]);if(!pd)return;
           const wl=isoWeekLabel(pd);if(!wl)return;
           const type   = row[colType]?row[colType].toString().trim():'未分類';
           const clinic = colClinic && row[colClinic] ? row[colClinic].toString().trim() : null;
-          // 執行：優先看執行日期欄（有日期＝已執行），其次看執行狀態欄的 V/是
           let ex = false;
           if(colExecD && row[colExecD]){ ex = !!toDate(row[colExecD]); }
           if(!ex && colExecS){ const s=row[colExecS]; ex = !!s&&['是','1','true','已執行','v','V','✓'].includes(s.toString().trim()); }
-          // 選課：是否選課欄 = 'V'
           const enrolled = !!(colEnroll && row[colEnroll] && row[colEnroll].toString().trim().toUpperCase()==='V');
-
-          // weekly
           if(!weekMap[wl])weekMap[wl]={開立數:0,執行數:0};
           weekMap[wl].開立數++;if(ex)weekMap[wl].執行數++;
-          // type weekly
           if(!typeWeekMap[type])typeWeekMap[type]={};
           if(!typeWeekMap[type][wl])typeWeekMap[type][wl]={開立數:0,執行數:0};
           typeWeekMap[type][wl].開立數++;if(ex)typeWeekMap[type][wl].執行數++;
-          // type total
           if(!typeMapTotal[type])typeMapTotal[type]={開立數:0,執行數:0};
           typeMapTotal[type].開立數++;if(ex)typeMapTotal[type].執行數++;
-          // ★ clinic：選課OR執行，去重（兩個都有只算一筆）
           if(clinic){
             if(!clinicMap[clinic])clinicMap[clinic]={開立數:0,選課或執行:0};
             clinicMap[clinic].開立數++;
@@ -1089,8 +1165,6 @@ function parseExcel(file){
           }
           if(!minDate||pd<minDate)minDate=pd;if(!maxDate||pd>maxDate)maxDate=pd;
         });
-
-        // 填補缺漏週次
         const existingWeeks=Object.keys(weekMap).sort();
         const allWeeks=[];
         if(existingWeeks.length>=2){
@@ -1112,10 +1186,7 @@ function parseExcel(file){
             const nwk=Math.ceil((((nd-nyrStart)/86400000)+1)/7);
             cur=`${nyr}W${String(nwk).padStart(2,'0')}`;
           }
-        } else {
-          allWeeks.push(...existingWeeks);
-        }
-
+        } else { allWeeks.push(...existingWeeks); }
         const sw=allWeeks;
         const newWeeklyData=sw.map(wl=>{
           const d=weekMap[wl]||{開立數:0,執行數:0};
@@ -1131,14 +1202,10 @@ function parseExcel(file){
           const d=typeWeekMap[t]?.[wl];
           if(d)newTWRaw.push({week_label:wl,處方類型:t,開立數:d.開立數,執行數:d.執行數});
         }));
-        // ★ 診所統計：選課或執行（去重）
         const newClinicStats = Object.entries(clinicMap).map(([name, v]) => ({
-          診所名稱:   name,
-          開立數:     v.開立數,
-          選課或執行: v.選課或執行,
-          比率:       v.開立數>0 ? parseFloat((v.選課或執行/v.開立數*100).toFixed(1)) : 0
+          診所名稱:   name, 開立數: v.開立數, 選課或執行: v.選課或執行,
+          比率: v.開立數>0 ? parseFloat((v.選課或執行/v.開立數*100).toFixed(1)) : 0
         }));
-
         const fmt=d=>`${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
         const dr=minDate&&maxDate?`${fmt(minDate)} – ${fmt(maxDate)}`:'—';
         resolve({newWeeklyData, newTypeStats, newTWRaw, newClinicStats, dateRange:dr});
@@ -1194,7 +1261,6 @@ function showTab(name, btn){
   document.getElementById('tab-'+name).classList.remove('hidden');
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
-  // 切到診所頁籤時重繪（避免 canvas 尺寸問題）
   if(name==='clinic') setTimeout(()=>buildClinicCharts(), 50);
 }
 
@@ -1224,6 +1290,337 @@ function downloadChart(btn) {
   ctx.drawImage(canvas,CARD_PAD,TITLE_H+SEP_GAP);
   const link=document.createElement('a');
   link.download=title+'.jpg'; link.href=tmpCanvas.toDataURL('image/jpeg',0.95); link.click();
+}
+
+// ══════════════════════════════════════════════
+//  ★ PDF 匯出系統
+// ══════════════════════════════════════════════
+
+// 所有可選的圖表定義（依分組）
+const PDF_CHART_GROUPS = [
+  {
+    groupId: 'weekly',
+    groupLabel: '📂 每週趨勢',
+    tabId: 'tab-weekly',
+    charts: [
+      { id: 'weekly-pres', label: '每週處方開立數' },
+      { id: 'weekly-exec', label: '每週處方執行數' },
+    ]
+  },
+  {
+    groupId: 'type',
+    groupLabel: '📊 處方開立分析',
+    tabId: 'tab-type',
+    charts: [
+      { id: 'cum-pres',  label: '處方開立數累積趨勢（依週）' },
+      { id: 'cum-exec',  label: '執行數累積趨勢（依週）' },
+      { id: 'pie-pres',  label: '各類型開立數佔比' },
+      { id: 'pie-exec',  label: '各類型執行數佔比' },
+      { id: 'hbar-type', label: '各類型開立數 vs 執行數（橫條對比）' },
+      { id: 'hbar-rate', label: '各類型執行率（%）' },
+    ]
+  },
+  {
+    groupId: 'typeweekly',
+    groupLabel: '🔎 各類型週趨勢細項',
+    tabId: 'tab-typeweekly',
+    charts: [
+      { id: 'tw-0',    label: '情緒調適處方週趨勢' },
+      { id: 'tw-1',    label: '營養處方週趨勢' },
+      { id: 'tw-2',    label: '社會處方週趨勢' },
+      { id: 'tw-3',    label: '運動處方週趨勢' },
+      { id: 'tw-hb-0', label: '情緒調適處方（橫條）' },
+      { id: 'tw-hb-1', label: '營養處方（橫條）' },
+      { id: 'tw-hb-2', label: '社會處方（橫條）' },
+      { id: 'tw-hb-3', label: '運動處方（橫條）' },
+    ]
+  },
+  {
+    groupId: 'clinic',
+    groupLabel: '🏥 診所分析',
+    tabId: 'tab-clinic',
+    charts: [
+      { id: 'clinic-enroll', label: '各診所選課或執行筆數' },
+      { id: 'clinic-bar',    label: '各診所開立數 vs 執行筆數' },
+      { id: 'clinic-rate',   label: '各診所選課或執行比率（%）' },
+    ]
+  }
+];
+
+let pdfChecked = new Set();
+let currentActiveTab = 'weekly';
+
+// 記錄目前 tab
+document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+  const tabs = ['weekly','type','typeweekly','clinic'];
+  btn.addEventListener('click', () => { currentActiveTab = tabs[i]; });
+});
+
+function openPdfModal() {
+  buildPdfChecklist();
+  updatePdfCount();
+  document.getElementById('pdf-modal-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closePdfModal() {
+  document.getElementById('pdf-modal-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function closePdfModalOutside(e) {
+  if (e.target === document.getElementById('pdf-modal-overlay')) closePdfModal();
+}
+
+function buildPdfChecklist() {
+  const container = document.getElementById('pdf-checklist');
+  container.innerHTML = '';
+
+  PDF_CHART_GROUPS.forEach(group => {
+    const groupDiv = document.createElement('div');
+    groupDiv.className = 'pdf-group';
+
+    const titleDiv = document.createElement('div');
+    titleDiv.className = 'pdf-group-title';
+    titleDiv.textContent = group.groupLabel;
+    groupDiv.appendChild(titleDiv);
+
+    const grid = document.createElement('div');
+    grid.className = 'pdf-check-grid';
+
+    group.charts.forEach(chart => {
+      const isChecked = pdfChecked.has(chart.id);
+      // 確認這個圖表是否在 DOM 中且可見（有圖表）
+      const sectionEl = document.querySelector(`[data-pdf-id="${chart.id}"]`);
+      const isAvailable = sectionEl !== null;
+
+      const item = document.createElement('label');
+      item.className = 'pdf-check-item' + (isChecked ? ' checked' : '') + (!isAvailable ? ' disabled' : '');
+      item.style.opacity = isAvailable ? '1' : '0.45';
+      item.style.cursor = isAvailable ? 'pointer' : 'default';
+      item.innerHTML = `
+        <input type="checkbox" value="${chart.id}" ${isChecked ? 'checked' : ''} ${!isAvailable ? 'disabled' : ''}>
+        <div class="pdf-check-box"></div>
+        <div class="pdf-check-text">
+          ${chart.label}
+          <small>${group.groupLabel.replace(/^[^\s]+\s/, '')}</small>
+        </div>
+      `;
+      if (isAvailable) {
+        item.addEventListener('click', () => togglePdfChart(chart.id, item));
+      }
+      grid.appendChild(item);
+    });
+
+    groupDiv.appendChild(grid);
+    container.appendChild(groupDiv);
+  });
+}
+
+function togglePdfChart(id, itemEl) {
+  if (pdfChecked.has(id)) {
+    pdfChecked.delete(id);
+    itemEl.classList.remove('checked');
+  } else {
+    pdfChecked.add(id);
+    itemEl.classList.add('checked');
+  }
+  updatePdfCount();
+}
+
+function updatePdfCount() {
+  document.getElementById('pdf-sel-count').textContent = pdfChecked.size;
+  document.getElementById('pdf-confirm-btn').disabled = pdfChecked.size === 0;
+}
+
+function pdfSelectAll(checked) {
+  PDF_CHART_GROUPS.forEach(group => {
+    group.charts.forEach(chart => {
+      const sectionEl = document.querySelector(`[data-pdf-id="${chart.id}"]`);
+      if (!sectionEl) return;
+      if (checked) pdfChecked.add(chart.id);
+      else pdfChecked.delete(chart.id);
+    });
+  });
+  buildPdfChecklist();
+  updatePdfCount();
+}
+
+function pdfSelectVisible() {
+  pdfChecked.clear();
+  const activeGroup = PDF_CHART_GROUPS.find(g => g.groupId === currentActiveTab);
+  if (activeGroup) {
+    activeGroup.charts.forEach(chart => {
+      const sectionEl = document.querySelector(`[data-pdf-id="${chart.id}"]`);
+      if (sectionEl) pdfChecked.add(chart.id);
+    });
+  }
+  buildPdfChecklist();
+  updatePdfCount();
+}
+
+// ── 核心 PDF 匯出 ──
+async function startPdfExport() {
+  if (pdfChecked.size === 0) return;
+
+  closePdfModal();
+
+  const progressOverlay = document.getElementById('pdf-progress-overlay');
+  const progressMsg = document.getElementById('pdf-progress-msg');
+  const progressSub = document.getElementById('pdf-progress-sub');
+  const progressBar = document.getElementById('pdf-prog-bar');
+
+  progressOverlay.classList.add('show');
+  progressMsg.textContent = '正在準備圖表…';
+  progressSub.textContent = `共選取 ${pdfChecked.size} 張圖表`;
+  progressBar.style.width = '0%';
+
+  try {
+    // 收集所有勾選的 canvas（依順序）
+    const selectedSections = [];
+    PDF_CHART_GROUPS.forEach(group => {
+      group.charts.forEach(chart => {
+        if (!pdfChecked.has(chart.id)) return;
+        const sectionEl = document.querySelector(`[data-pdf-id="${chart.id}"]`);
+        if (!sectionEl) return;
+        const canvas = sectionEl.querySelector('canvas');
+        if (!canvas) return;
+        const titleEl = sectionEl.querySelector('h2');
+        const title = titleEl ? titleEl.textContent.trim() : chart.label;
+        selectedSections.push({ sectionEl, canvas, title, id: chart.id });
+      });
+    });
+
+    if (selectedSections.length === 0) {
+      alert('所選圖表目前無資料，請先上傳 Excel 或切換到有圖表的頁籤。');
+      progressOverlay.classList.remove('show');
+      return;
+    }
+
+    // A4 橫向：297 × 210 mm → 以 150dpi 換算像素約 1754 × 1240
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const PAGE_W = 297, PAGE_H = 210;
+    const MARGIN = 12;
+    const HEADER_H = 14; // 頁面標題列高度（mm）
+    const FOOTER_H = 8;
+    const CONTENT_H = PAGE_H - MARGIN * 2 - HEADER_H - FOOTER_H;
+    const CONTENT_W = PAGE_W - MARGIN * 2;
+
+    // 將 canvas 轉成高品質圖片資料
+    const images = [];
+    for (let i = 0; i < selectedSections.length; i++) {
+      const { canvas, title } = selectedSections[i];
+      progressMsg.textContent = `擷取圖表 ${i+1} / ${selectedSections.length}`;
+      progressSub.textContent = title;
+      progressBar.style.width = ((i / selectedSections.length) * 70) + '%';
+
+      await new Promise(r => setTimeout(r, 30)); // 讓 UI 更新
+
+      // 建立帶標題的 canvas（與下載JPG相同邏輯）
+      const CARD_PAD=20, TITLE_H=60, SEP_GAP=10, BAR_W=4, BAR_H=16;
+      const BAR_X=CARD_PAD, TEXT_X=BAR_X+BAR_W+8;
+      const cw = canvas.width + CARD_PAD * 2;
+      const ch = canvas.height + TITLE_H + SEP_GAP + CARD_PAD;
+      const tmp = document.createElement('canvas');
+      tmp.width = cw; tmp.height = ch;
+      const ctx = tmp.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, cw, ch);
+      // 標題列漸層裝飾
+      const barGrad = ctx.createLinearGradient(0, (TITLE_H-BAR_H)/2, 0, (TITLE_H+BAR_H)/2);
+      barGrad.addColorStop(0,'#8fba2e'); barGrad.addColorStop(0.5,'#2aac8a'); barGrad.addColorStop(1,'#1a9fbe');
+      ctx.fillStyle = barGrad;
+      ctx.beginPath();
+      ctx.roundRect(BAR_X, (TITLE_H-BAR_H)/2, BAR_W, BAR_H, 2);
+      ctx.fill();
+      ctx.fillStyle = '#1a2e28';
+      ctx.font = `bold 28px "Microsoft JhengHei",Arial,sans-serif`;
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+      ctx.fillText(title, TEXT_X, TITLE_H / 2);
+      ctx.strokeStyle = '#d6ede5';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(CARD_PAD, TITLE_H);
+      ctx.lineTo(cw - CARD_PAD, TITLE_H);
+      ctx.stroke();
+      ctx.drawImage(canvas, CARD_PAD, TITLE_H + SEP_GAP);
+      images.push({ dataUrl: tmp.toDataURL('image/jpeg', 0.92), w: cw, h: ch, title });
+    }
+
+    // 排版：每頁 2 張，左右各半
+    progressMsg.textContent = '正在合併成 PDF…';
+    progressBar.style.width = '80%';
+    await new Promise(r => setTimeout(r, 30));
+
+    const SLOT_W = (CONTENT_W - MARGIN) / 2; // 每個圖表槽的寬度
+    const SLOT_H = CONTENT_H;
+
+    let isFirstPage = true;
+    for (let i = 0; i < images.length; i += 2) {
+      if (!isFirstPage) pdf.addPage();
+      isFirstPage = false;
+
+      // 頁首
+      pdf.setFillColor(143, 186, 46);
+      pdf.rect(MARGIN, MARGIN, CONTENT_W, 0.8, 'F');
+      pdf.setFontSize(9);
+      pdf.setTextColor(90, 122, 112);
+      pdf.text('◈ 健康處方開立統計儀表板', MARGIN, MARGIN + 5);
+      const dateStr = new Date().toLocaleDateString('zh-TW');
+      pdf.text(`匯出日期：${dateStr}`, PAGE_W - MARGIN, MARGIN + 5, { align: 'right' });
+
+      // 頁碼
+      const pageNum = Math.floor(i / 2) + 1;
+      const totalPages = Math.ceil(images.length / 2);
+      pdf.setFontSize(8);
+      pdf.setTextColor(150, 170, 160);
+      pdf.text(`第 ${pageNum} 頁 / 共 ${totalPages} 頁`, PAGE_W / 2, PAGE_H - MARGIN + 2, { align: 'center' });
+
+      // 放置圖表
+      const slots = [
+        { x: MARGIN, y: MARGIN + HEADER_H },
+        { x: MARGIN + SLOT_W + MARGIN, y: MARGIN + HEADER_H }
+      ];
+
+      for (let j = 0; j < 2; j++) {
+        const imgIdx = i + j;
+        if (imgIdx >= images.length) break;
+        const img = images[imgIdx];
+        const slot = slots[j];
+
+        // 計算等比縮放
+        const scaleX = SLOT_W / (img.w / 3.7795); // px to mm (96dpi)
+        const scaleY = SLOT_H / (img.h / 3.7795);
+        const scale = Math.min(scaleX, scaleY, 1);
+        const drawW = (img.w / 3.7795) * scale;
+        const drawH = (img.h / 3.7795) * scale;
+        // 垂直置中
+        const offsetY = (SLOT_H - drawH) / 2;
+
+        // 圖表背景卡片
+        pdf.setFillColor(255, 255, 255);
+        pdf.setDrawColor(214, 237, 229);
+        pdf.roundedRect(slot.x, slot.y, SLOT_W, SLOT_H, 3, 3, 'FD');
+
+        pdf.addImage(img.dataUrl, 'JPEG', slot.x + 2, slot.y + offsetY + 2, drawW - 4, drawH - 4);
+      }
+    }
+
+    progressMsg.textContent = '完成！正在下載…';
+    progressBar.style.width = '100%';
+    await new Promise(r => setTimeout(r, 300));
+
+    const dateStr2 = new Date().toLocaleDateString('zh-TW').replace(/\//g, '-');
+    pdf.save(`健康處方統計報告_${dateStr2}.pdf`);
+
+  } catch(err) {
+    console.error('PDF 匯出失敗', err);
+    alert('PDF 匯出時發生錯誤：' + err.message);
+  } finally {
+    progressOverlay.classList.remove('show');
+  }
 }
 
 // ── 初始化 ──
