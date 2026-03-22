@@ -1004,7 +1004,7 @@ function buildTypeCharts(mode){
         ctx.fillText((val/total*100).toFixed(1)+'%',x,y+7);ctx.restore();
       });
     }};
-    const pieOpts={responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:defaultFont,padding:14,boxWidth:14}},tooltip:{callbacks:{label:c=>{const sum=c.dataset.data.reduce((a,b)=>a+b,0);return ` ${c.label}：${c.parsed} 筆（${(c.parsed/sum*100).toFixed(1)}%）`;}}}}};
+    const pieOpts={responsive:true,maintainAspectRatio:false,animation:{duration:0},plugins:{legend:{position:'bottom',labels:{font:defaultFont,padding:14,boxWidth:14}},tooltip:{callbacks:{label:c=>{const sum=c.dataset.data.reduce((a,b)=>a+b,0);return ` ${c.label}：${c.parsed} 筆（${(c.parsed/sum*100).toFixed(1)}%）`;}}}}};
     const mkPie=(id,key)=>new Chart(document.getElementById(id).getContext('2d'),{type:mode,plugins:[pieLabelPlugin],data:{labels:types,datasets:[{data:typeStats.map(d=>d[key]),backgroundColor:PIE_COLORS,borderColor:'#fff',borderWidth:2,hoverOffset:10}]},options:pieOpts});
     chartInstances['pieP']=mkPie('piePresChart','開立數');
     chartInstances['pieE']=mkPie('pieExecChart','執行數');
@@ -1692,8 +1692,12 @@ async function startPdfExport() {
         }
         // 強制重建圖表（確保 canvas 有正確尺寸）
         if (ctx.rebuildFn) ctx.rebuildFn();
-        // 等待渲染
-        await new Promise(r => setTimeout(r, 300));
+        // 強制所有圖表立即完成動畫（不等待動畫結束）
+        Object.values(chartInstances).forEach(c => {
+          try { c.update('none'); } catch(e) {}
+        });
+        // 等待 DOM 更新
+        await new Promise(r => setTimeout(r, 400));
         lastCtxKey = ctxKey;
       }
 
@@ -1703,7 +1707,41 @@ async function startPdfExport() {
       if (!canvas || canvas.width === 0 || canvas.height === 0) continue;
       const titleEl = sectionEl.querySelector('h2');
       const title = titleEl ? titleEl.textContent.trim() : chartId;
-      selectedSections.push({ imgDataUrl: canvas.toDataURL('image/png'), title, id: chartId });
+
+      // 再次強制當前 canvas 的圖表立即完成動畫
+      const instanceKey = PDF_CHART_INSTANCE_MAP[chartId];
+      const chartInst = instanceKey ? chartInstances[instanceKey] : null;
+      if (chartInst) {
+        try { chartInst.update('none'); } catch(e) {}
+      }
+
+      // 用離屏 canvas 以固定高解析度重新渲染，避免原始 canvas 太小導致標籤擠壓
+      const PDF_W = 1400, PDF_H = 700;
+      const offscreen = document.createElement('canvas');
+      offscreen.width = PDF_W; offscreen.height = PDF_H;
+      const offCtx = offscreen.getContext('2d');
+      offCtx.fillStyle = '#ffffff';
+      offCtx.fillRect(0, 0, PDF_W, PDF_H);
+
+      if (chartInst) {
+        // 暫時調整圖表尺寸重新渲染到離屏 canvas
+        const origW = canvas.width, origH = canvas.height;
+        // 用 Chart.js resize 到目標尺寸
+        try {
+          chartInst.resize(PDF_W, PDF_H);
+          chartInst.update('none');
+          offCtx.drawImage(canvas, 0, 0);
+          // 還原
+          chartInst.resize(origW, origH);
+          chartInst.update('none');
+        } catch(e) {
+          offCtx.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, 0, PDF_W, PDF_H);
+        }
+      } else {
+        offCtx.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, 0, PDF_W, PDF_H);
+      }
+
+      selectedSections.push({ imgDataUrl: offscreen.toDataURL('image/png'), title, id: chartId });
     }
 
     // 還原原本的 tab
