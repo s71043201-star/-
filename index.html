@@ -706,6 +706,11 @@ if (isConfigured) {
   document.getElementById("setup-banner").style.display = "none";
 }
 
+// 全域關閉 Chart.js 動畫（確保截圖時圖表完整渲染）
+Chart.defaults.animation = false;
+Chart.defaults.animations = false;
+Chart.defaults.transitions = {};
+
 // ══════════════════════════════════════════════
 //  色彩常數
 // ══════════════════════════════════════════════
@@ -1708,40 +1713,15 @@ async function startPdfExport() {
       const titleEl = sectionEl.querySelector('h2');
       const title = titleEl ? titleEl.textContent.trim() : chartId;
 
-      // 再次強制當前 canvas 的圖表立即完成動畫
+      // 強制當前圖表立即完成動畫
       const instanceKey = PDF_CHART_INSTANCE_MAP[chartId];
       const chartInst = instanceKey ? chartInstances[instanceKey] : null;
       if (chartInst) {
         try { chartInst.update('none'); } catch(e) {}
       }
 
-      // 用離屏 canvas 以固定高解析度重新渲染，避免原始 canvas 太小導致標籤擠壓
-      const PDF_W = 1400, PDF_H = 700;
-      const offscreen = document.createElement('canvas');
-      offscreen.width = PDF_W; offscreen.height = PDF_H;
-      const offCtx = offscreen.getContext('2d');
-      offCtx.fillStyle = '#ffffff';
-      offCtx.fillRect(0, 0, PDF_W, PDF_H);
-
-      if (chartInst) {
-        // 暫時調整圖表尺寸重新渲染到離屏 canvas
-        const origW = canvas.width, origH = canvas.height;
-        // 用 Chart.js resize 到目標尺寸
-        try {
-          chartInst.resize(PDF_W, PDF_H);
-          chartInst.update('none');
-          offCtx.drawImage(canvas, 0, 0);
-          // 還原
-          chartInst.resize(origW, origH);
-          chartInst.update('none');
-        } catch(e) {
-          offCtx.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, 0, PDF_W, PDF_H);
-        }
-      } else {
-        offCtx.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, 0, PDF_W, PDF_H);
-      }
-
-      selectedSections.push({ imgDataUrl: offscreen.toDataURL('image/png'), title, id: chartId });
+      // 直接用原始 canvas 截圖，不做任何 resize（避免圖表布局跑掉）
+      selectedSections.push({ imgDataUrl: canvas.toDataURL('image/png'), title, id: chartId });
     }
 
     // 還原原本的 tab
