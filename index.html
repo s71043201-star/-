@@ -504,7 +504,7 @@ footer {
   <button id="pdf-export-btn" onclick="openPdfModal()">
     <span class="pdf-icon">📑</span> 選擇圖表並匯出 PDF
   </button>
-  <span style="font-size:0.78rem;color:var(--text-muted);">勾選想要的圖表，每頁自動放 2 張，合併下載</span>
+  <span style="font-size:0.78rem;color:var(--text-muted);">勾選想要的圖表，每張圖表獨立一頁，合併下載</span>
 </div>
 
 <!-- 週次說明列 -->
@@ -1784,12 +1784,12 @@ async function startPdfExport() {
       });
     }
 
-    // 排版：每頁 2 張，左右各半
+    // 排版：每頁 1 張，圖表填滿整頁
     progressMsg.textContent = '正在合併成 PDF…';
     progressBar.style.width = '80%';
     await new Promise(r => setTimeout(r, 30));
 
-    const SLOT_W = (CONTENT_W - MARGIN) / 2;
+    const SLOT_W = CONTENT_W;
     const SLOT_H = CONTENT_H;
 
     // 用 canvas 繪製頁首（解決 jsPDF 中文亂碼）
@@ -1800,20 +1800,16 @@ async function startPdfExport() {
       const cx = c.getContext('2d');
       cx.fillStyle = '#ffffff';
       cx.fillRect(0, 0, W, H);
-      // 漸層裝飾線
       const grad = cx.createLinearGradient(0, 0, W, 0);
       grad.addColorStop(0, '#8fba2e'); grad.addColorStop(0.5, '#2aac8a'); grad.addColorStop(1, '#1a9fbe');
       cx.fillStyle = grad; cx.fillRect(0, 0, W, 10);
-      // 標題（用系統字體確保中文正常）
       cx.fillStyle = '#1a2e28';
       cx.font = 'bold 38px sans-serif';
       cx.textBaseline = 'alphabetic'; cx.textAlign = 'left';
       cx.fillText('健康處方開立統計儀表板', 20, 68);
-      // 週次備註
       cx.fillStyle = '#5a8a74';
       cx.font = '26px sans-serif';
       cx.fillText('週次定義：每週六起算至下週五結束', 20, 100);
-      // 右側：匯出日期 + 頁碼
       const dateStr = new Date().toLocaleDateString('zh-TW');
       cx.fillStyle = '#3a6a58';
       cx.font = '28px sans-serif';
@@ -1822,68 +1818,39 @@ async function startPdfExport() {
       return c.toDataURL('image/png');
     }
 
-    // 最後一頁若只有 1 張：改為置中單張（全版）
-    const lastIsAlone = images.length % 2 === 1;
-
     let isFirstPage = true;
-    for (let i = 0; i < images.length; i += 2) {
+    for (let i = 0; i < images.length; i++) {
       if (!isFirstPage) pdf.addPage();
       isFirstPage = false;
 
-      const pageNum = Math.floor(i / 2) + 1;
-      const totalPages = Math.ceil(images.length / 2);
+      const pageNum = i + 1;
+      const totalPages = images.length;
 
-      // 頁首（canvas 圖片，無亂碼）
+      // 頁首
       const headerDataUrl = makeHeaderCanvas(pageNum, totalPages);
       const HEADER_IMG_H = HEADER_H - 1;
-      pdf.addImage(headerDataUrl, 'JPEG', MARGIN, MARGIN, CONTENT_W, HEADER_IMG_H);
+      pdf.addImage(headerDataUrl, 'PNG', MARGIN, MARGIN, CONTENT_W, HEADER_IMG_H);
 
       // 頁碼分隔線
       pdf.setDrawColor(214, 237, 229);
       pdf.setLineWidth(0.3);
       pdf.line(MARGIN, PAGE_H - MARGIN - 4, PAGE_W - MARGIN, PAGE_H - MARGIN - 4);
 
-      // 判斷是否最後一頁只剩 1 張
-      const isLastAlone = lastIsAlone && i === images.length - 1;
+      // 圖表填滿整頁（等比縮放，不超過頁面）
+      const img = images[i];
+      const PX_PER_MM = 3.7795; // 96dpi → mm
+      const scaleX = SLOT_W / (img.w / PX_PER_MM);
+      const scaleY = SLOT_H / (img.h / PX_PER_MM);
+      const scale = Math.min(scaleX, scaleY);
+      const drawW = (img.w / PX_PER_MM) * scale;
+      const drawH = (img.h / PX_PER_MM) * scale;
+      const offsetX = (SLOT_W - drawW) / 2;
+      const offsetY = (SLOT_H - drawH) / 2;
 
-      if (isLastAlone) {
-        // 單張置中放大
-        const img = images[i];
-        const fullW = CONTENT_W;
-        const scaleX = fullW / (img.w / 3.7795);
-        const scaleY = SLOT_H / (img.h / 3.7795);
-        const scale = Math.min(scaleX, scaleY);
-        const drawW = (img.w / 3.7795) * scale;
-        const drawH = (img.h / 3.7795) * scale;
-        const offsetX = (CONTENT_W - drawW) / 2;
-        const offsetY = (SLOT_H - drawH) / 2;
-        pdf.setFillColor(255, 255, 255);
-        pdf.setDrawColor(214, 237, 229);
-        pdf.roundedRect(MARGIN, MARGIN + HEADER_H, CONTENT_W, SLOT_H, 3, 3, 'FD');
-        pdf.addImage(img.dataUrl, 'JPEG', MARGIN + offsetX + 2, MARGIN + HEADER_H + offsetY + 2, drawW - 4, drawH - 4);
-      } else {
-        // 正常雙欄
-        const slots = [
-          { x: MARGIN, y: MARGIN + HEADER_H },
-          { x: MARGIN + SLOT_W + MARGIN, y: MARGIN + HEADER_H }
-        ];
-        for (let j = 0; j < 2; j++) {
-          const imgIdx = i + j;
-          if (imgIdx >= images.length) break;
-          const img = images[imgIdx];
-          const slot = slots[j];
-          const scaleX = SLOT_W / (img.w / 3.7795);
-          const scaleY = SLOT_H / (img.h / 3.7795);
-          const scale = Math.min(scaleX, scaleY);
-          const drawW = (img.w / 3.7795) * scale;
-          const drawH = (img.h / 3.7795) * scale;
-          const offsetY = (SLOT_H - drawH) / 2;
-          pdf.setFillColor(255, 255, 255);
-          pdf.setDrawColor(214, 237, 229);
-          pdf.roundedRect(slot.x, slot.y, SLOT_W, SLOT_H, 3, 3, 'FD');
-          pdf.addImage(img.dataUrl, 'JPEG', slot.x + 2, slot.y + offsetY + 2, drawW - 4, drawH - 4);
-        }
-      }
+      pdf.setFillColor(255, 255, 255);
+      pdf.setDrawColor(214, 237, 229);
+      pdf.roundedRect(MARGIN, MARGIN + HEADER_H, SLOT_W, SLOT_H, 3, 3, 'FD');
+      pdf.addImage(img.dataUrl, 'PNG', MARGIN + offsetX + 2, MARGIN + HEADER_H + offsetY + 2, drawW - 4, drawH - 4);
     }
 
     progressMsg.textContent = '完成！正在下載…';
