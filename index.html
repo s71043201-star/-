@@ -215,8 +215,24 @@ header p { font-size: 0.86rem; opacity: 0.88; margin-top: 5px; letter-spacing: 0
 
 /* 全選 / 全不選 */
 .pdf-select-all-row {
-  display: flex; gap: 8px; margin-bottom: 14px;
+  display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;
 }
+
+/* 頁籤篩選列 */
+.pdf-tab-filter {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  margin-bottom: 14px; padding-bottom: 12px;
+  border-bottom: 1.5px solid var(--border);
+}
+.pdf-tab-btn {
+  padding: 5px 14px; border-radius: 20px;
+  border: 1.5px solid var(--border); background: var(--surface);
+  color: var(--text-muted); font-size: 0.8rem; font-family: inherit;
+  cursor: pointer; transition: all 0.15s; font-weight: 600;
+  white-space: nowrap;
+}
+.pdf-tab-btn.active { background: #e0f7ef; border-color: var(--teal); color: var(--teal); }
+.pdf-tab-btn:hover:not(.active) { border-color: #7dd4b8; background: #f0fbf7; }
 .pdf-sel-btn {
   padding: 4px 12px; border-radius: 20px;
   border: 1.5px solid var(--border); background: var(--surface);
@@ -620,10 +636,19 @@ footer {
       <button class="pdf-modal-close" onclick="closePdfModal()">✕</button>
     </div>
     <div class="pdf-modal-body">
+      <!-- 頁籤篩選列 -->
+      <div class="pdf-tab-filter" id="pdf-tab-filter">
+        <button class="pdf-tab-btn active" onclick="setPdfFilter('all',this)">全部</button>
+        <button class="pdf-tab-btn" onclick="setPdfFilter('weekly',this)">📂 每週趨勢</button>
+        <button class="pdf-tab-btn" onclick="setPdfFilter('type',this)">📊 開立分析</button>
+        <button class="pdf-tab-btn" onclick="setPdfFilter('typeweekly',this)">🔎 週趨勢細項</button>
+        <button class="pdf-tab-btn" onclick="setPdfFilter('clinic',this)">🏥 診所分析</button>
+      </div>
+      <!-- 全選 / 全不選（針對目前篩選範圍） -->
       <div class="pdf-select-all-row">
-        <button class="pdf-sel-btn" onclick="pdfSelectAll(true)">✅ 全選</button>
-        <button class="pdf-sel-btn" onclick="pdfSelectAll(false)">☐ 全不選</button>
-        <button class="pdf-sel-btn" onclick="pdfSelectVisible()">👁 只選目前頁籤</button>
+        <button class="pdf-sel-btn" onclick="pdfSelectFiltered(true)">✅ 全選（此分類）</button>
+        <button class="pdf-sel-btn" onclick="pdfSelectFiltered(false)">☐ 全不選（此分類）</button>
+        <button class="pdf-sel-btn" onclick="pdfSelectAll(false)">🗑 清空所有</button>
       </div>
       <div id="pdf-checklist"></div>
     </div>
@@ -1106,9 +1131,23 @@ function buildAllCharts(){
 // ══════════════════════════════════════════════
 function toDate(val){
   if(!val&&val!==0) return null;
-  if(val instanceof Date) return val;
-  if(typeof val==='number') return new Date(Math.round((val-25569)*86400*1000));
-  if(typeof val==='string'){const d=new Date(val);return isNaN(d)?null:d;}
+  // JS Date 物件：XLSX cellDates:true 可能含時區偏移，強制取本地年月日建 UTC 午夜
+  if(val instanceof Date){
+    if(isNaN(val)) return null;
+    return new Date(Date.UTC(val.getFullYear(), val.getMonth(), val.getDate()));
+  }
+  // Excel 序列數
+  if(typeof val==='number'){
+    const d = new Date(Math.round((val-25569)*86400*1000));
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  }
+  // 字串：支援 "2026/03/21 14:30:00"、"2026-03-21" 等格式
+  if(typeof val==='string'){
+    const m = val.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+    if(m) return new Date(Date.UTC(+m[1], +m[2]-1, +m[3]));
+    const d = new Date(val);
+    return isNaN(d) ? null : new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  }
   return null;
 }
 function detectCol(headers, candidates, exact=false){
@@ -1348,6 +1387,7 @@ const PDF_CHART_GROUPS = [
 
 let pdfChecked = new Set();
 let currentActiveTab = 'weekly';
+let currentPdfFilter = 'all';
 
 // 記錄目前 tab
 document.querySelectorAll('.tab-btn').forEach((btn, i) => {
@@ -1371,49 +1411,61 @@ function closePdfModalOutside(e) {
   if (e.target === document.getElementById('pdf-modal-overlay')) closePdfModal();
 }
 
+function setPdfFilter(filter, btn) {
+  currentPdfFilter = filter;
+  document.querySelectorAll('.pdf-tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  buildPdfChecklist();
+}
+
+// 取得目前篩選後的圖表清單
+function getFilteredCharts() {
+  const all = [];
+  PDF_CHART_GROUPS.forEach(group => {
+    group.charts.forEach(chart => {
+      all.push({ ...chart, groupId: group.groupId, groupLabel: group.groupLabel });
+    });
+  });
+  if (currentPdfFilter === 'all') return all;
+  return all.filter(c => c.groupId === currentPdfFilter);
+}
+
 function buildPdfChecklist() {
   const container = document.getElementById('pdf-checklist');
   container.innerHTML = '';
 
-  PDF_CHART_GROUPS.forEach(group => {
-    const groupDiv = document.createElement('div');
-    groupDiv.className = 'pdf-group';
+  const filtered = getFilteredCharts();
 
-    const titleDiv = document.createElement('div');
-    titleDiv.className = 'pdf-group-title';
-    titleDiv.textContent = group.groupLabel;
-    groupDiv.appendChild(titleDiv);
+  // 平坦 grid，不分組
+  const grid = document.createElement('div');
+  grid.className = 'pdf-check-grid';
 
-    const grid = document.createElement('div');
-    grid.className = 'pdf-check-grid';
+  filtered.forEach(chart => {
+    const isChecked = pdfChecked.has(chart.id);
+    const sectionEl = document.querySelector(`[data-pdf-id="${chart.id}"]`);
+    const isAvailable = sectionEl !== null;
 
-    group.charts.forEach(chart => {
-      const isChecked = pdfChecked.has(chart.id);
-      // 確認這個圖表是否在 DOM 中且可見（有圖表）
-      const sectionEl = document.querySelector(`[data-pdf-id="${chart.id}"]`);
-      const isAvailable = sectionEl !== null;
-
-      const item = document.createElement('label');
-      item.className = 'pdf-check-item' + (isChecked ? ' checked' : '') + (!isAvailable ? ' disabled' : '');
-      item.style.opacity = isAvailable ? '1' : '0.45';
-      item.style.cursor = isAvailable ? 'pointer' : 'default';
-      item.innerHTML = `
-        <input type="checkbox" value="${chart.id}" ${isChecked ? 'checked' : ''} ${!isAvailable ? 'disabled' : ''}>
-        <div class="pdf-check-box"></div>
-        <div class="pdf-check-text">
-          ${chart.label}
-          <small>${group.groupLabel.replace(/^[^\s]+\s/, '')}</small>
-        </div>
-      `;
-      if (isAvailable) {
-        item.addEventListener('click', () => togglePdfChart(chart.id, item));
-      }
-      grid.appendChild(item);
-    });
-
-    groupDiv.appendChild(grid);
-    container.appendChild(groupDiv);
+    const item = document.createElement('label');
+    item.className = 'pdf-check-item' + (isChecked ? ' checked' : '');
+    item.style.opacity = isAvailable ? '1' : '0.4';
+    item.style.cursor = isAvailable ? 'pointer' : 'default';
+    // 顯示所屬分頁為小字標籤
+    const groupName = chart.groupLabel.replace(/^[\S]+\s/, '');
+    item.innerHTML = `
+      <input type="checkbox" value="${chart.id}" ${isChecked ? 'checked' : ''} ${!isAvailable ? 'disabled' : ''}>
+      <div class="pdf-check-box"></div>
+      <div class="pdf-check-text">
+        ${chart.label}
+        <small>${groupName}</small>
+      </div>
+    `;
+    if (isAvailable) {
+      item.addEventListener('click', () => togglePdfChart(chart.id, item));
+    }
+    grid.appendChild(item);
   });
+
+  container.appendChild(grid);
 }
 
 function togglePdfChart(id, itemEl) {
@@ -1432,6 +1484,20 @@ function updatePdfCount() {
   document.getElementById('pdf-confirm-btn').disabled = pdfChecked.size === 0;
 }
 
+// 全選/全不選：只對目前篩選範圍
+function pdfSelectFiltered(checked) {
+  const filtered = getFilteredCharts();
+  filtered.forEach(chart => {
+    const sectionEl = document.querySelector(`[data-pdf-id="${chart.id}"]`);
+    if (!sectionEl) return;
+    if (checked) pdfChecked.add(chart.id);
+    else pdfChecked.delete(chart.id);
+  });
+  buildPdfChecklist();
+  updatePdfCount();
+}
+
+// 清空所有（不限篩選）
 function pdfSelectAll(checked) {
   PDF_CHART_GROUPS.forEach(group => {
     group.charts.forEach(chart => {
@@ -1441,19 +1507,6 @@ function pdfSelectAll(checked) {
       else pdfChecked.delete(chart.id);
     });
   });
-  buildPdfChecklist();
-  updatePdfCount();
-}
-
-function pdfSelectVisible() {
-  pdfChecked.clear();
-  const activeGroup = PDF_CHART_GROUPS.find(g => g.groupId === currentActiveTab);
-  if (activeGroup) {
-    activeGroup.charts.forEach(chart => {
-      const sectionEl = document.querySelector(`[data-pdf-id="${chart.id}"]`);
-      if (sectionEl) pdfChecked.add(chart.id);
-    });
-  }
   buildPdfChecklist();
   updatePdfCount();
 }
