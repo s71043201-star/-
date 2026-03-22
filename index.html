@@ -1439,6 +1439,29 @@ const PDF_CHART_GROUPS = [
   }
 ];
 
+// data-pdf-id → chartInstances key 對照表
+const PDF_CHART_INSTANCE_MAP = {
+  'weekly-pres': 'weeklyBar',
+  'weekly-exec': 'weeklyExec',
+  'cum-pres':    'cumP',
+  'cum-exec':    'cumE',
+  'pie-pres':    'pieP',
+  'pie-exec':    'pieE',
+  'hbar-type':   'hbarType',
+  'hbar-rate':   'hbarRate',
+  'tw-0':        'tw0',
+  'tw-1':        'tw1',
+  'tw-2':        'tw2',
+  'tw-3':        'tw3',
+  'tw-hb-0':     'twHbar0',
+  'tw-hb-1':     'twHbar1',
+  'tw-hb-2':     'twHbar2',
+  'tw-hb-3':     'twHbar3',
+  'clinic-enroll': 'clinicEnroll',
+  'clinic-bar':    'clinicBar',
+  'clinic-rate':   'clinicRate',
+};
+
 let pdfChecked = new Set();
 let currentActiveTab = 'weekly';
 let currentPdfFilter = 'all';
@@ -1584,62 +1607,30 @@ async function startPdfExport() {
   progressBar.style.width = '0%';
 
   try {
-    // ── 暫時顯示所有隱藏頁籤，讓 canvas 有尺寸 ──
-    const tabIds = ['tab-weekly','tab-type','tab-typeweekly','tab-clinic'];
-    const hiddenTabs = [];
-    tabIds.forEach(id => {
-      const el = document.getElementById(id);
-      if (el && el.classList.contains('hidden')) {
-        el.classList.remove('hidden');
-        el.style.visibility = 'hidden'; // 顯示但不可見
-        el.style.position = 'absolute';
-        el.style.pointerEvents = 'none';
-        hiddenTabs.push(el);
-      }
-    });
-    // 同樣處理 type 子 view（line/pie/hbar）
-    const subViews = ['type-line-view','type-pie-view','type-hbar-view','tw-multi-view','tw-hbar-view'];
-    const hiddenSubViews = [];
-    subViews.forEach(id => {
-      const el = document.getElementById(id);
-      if (el && el.classList.contains('hidden')) {
-        el.classList.remove('hidden');
-        el.style.visibility = 'hidden';
-        el.style.position = 'absolute';
-        el.style.pointerEvents = 'none';
-        hiddenSubViews.push(el);
-      }
-    });
-    // 等待 chart.js 重繪
-    await new Promise(r => setTimeout(r, 120));
-
-    // 收集所有勾選的 canvas（依順序）
+    // 收集所有勾選圖表（直接從 chartInstances 取圖，不動 DOM）
     const selectedSections = [];
     PDF_CHART_GROUPS.forEach(group => {
       group.charts.forEach(chart => {
         if (!pdfChecked.has(chart.id)) return;
+        const instanceKey = PDF_CHART_INSTANCE_MAP[chart.id];
+        const instance = instanceKey ? chartInstances[instanceKey] : null;
+        // 從 Chart.js 實例直接取高解析度圖片
+        let imgDataUrl = null;
+        if (instance) {
+          imgDataUrl = instance.toBase64Image('image/jpeg', 0.95);
+        } else {
+          // fallback：從 DOM canvas 取（限目前可見頁籤）
+          const sectionEl = document.querySelector(`[data-pdf-id="${chart.id}"]`);
+          const canvas = sectionEl ? sectionEl.querySelector('canvas') : null;
+          if (canvas && canvas.width > 0) imgDataUrl = canvas.toDataURL('image/jpeg', 0.95);
+        }
+        if (!imgDataUrl) return;
+        // 取標題
         const sectionEl = document.querySelector(`[data-pdf-id="${chart.id}"]`);
-        if (!sectionEl) return;
-        const canvas = sectionEl.querySelector('canvas');
-        if (!canvas || canvas.width === 0 || canvas.height === 0) return;
-        const titleEl = sectionEl.querySelector('h2');
+        const titleEl = sectionEl ? sectionEl.querySelector('h2') : null;
         const title = titleEl ? titleEl.textContent.trim() : chart.label;
-        selectedSections.push({ sectionEl, canvas, title, id: chart.id });
+        selectedSections.push({ imgDataUrl, title, id: chart.id });
       });
-    });
-
-    // 還原隱藏狀態
-    hiddenTabs.forEach(el => {
-      el.classList.add('hidden');
-      el.style.visibility = '';
-      el.style.position = '';
-      el.style.pointerEvents = '';
-    });
-    hiddenSubViews.forEach(el => {
-      el.classList.add('hidden');
-      el.style.visibility = '';
-      el.style.position = '';
-      el.style.pointerEvents = '';
     });
 
     if (selectedSections.length === 0) {
@@ -1658,46 +1649,63 @@ async function startPdfExport() {
     const CONTENT_H = PAGE_H - MARGIN * 2 - HEADER_H - FOOTER_H;
     const CONTENT_W = PAGE_W - MARGIN * 2;
 
-    // 將 canvas 轉成高品質圖片資料
+    // 將圖表轉成帶標題的合成圖片
     const images = [];
     for (let i = 0; i < selectedSections.length; i++) {
-      const { canvas, title } = selectedSections[i];
-      progressMsg.textContent = `擷取圖表 ${i+1} / ${selectedSections.length}`;
+      const { imgDataUrl, title } = selectedSections[i];
+      progressMsg.textContent = `處理圖表 ${i+1} / ${selectedSections.length}`;
       progressSub.textContent = title;
       progressBar.style.width = ((i / selectedSections.length) * 70) + '%';
+      await new Promise(r => setTimeout(r, 20));
 
-      await new Promise(r => setTimeout(r, 30)); // 讓 UI 更新
-
-      // 建立帶標題的 canvas（與下載JPG相同邏輯）
-      const CARD_PAD=20, TITLE_H=60, SEP_GAP=10, BAR_W=4, BAR_H=16;
-      const BAR_X=CARD_PAD, TEXT_X=BAR_X+BAR_W+8;
-      const cw = canvas.width + CARD_PAD * 2;
-      const ch = canvas.height + TITLE_H + SEP_GAP + CARD_PAD;
-      const tmp = document.createElement('canvas');
-      tmp.width = cw; tmp.height = ch;
-      const ctx = tmp.getContext('2d');
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, cw, ch);
-      // 標題列漸層裝飾
-      const barGrad = ctx.createLinearGradient(0, (TITLE_H-BAR_H)/2, 0, (TITLE_H+BAR_H)/2);
-      barGrad.addColorStop(0,'#8fba2e'); barGrad.addColorStop(0.5,'#2aac8a'); barGrad.addColorStop(1,'#1a9fbe');
-      ctx.fillStyle = barGrad;
-      ctx.beginPath();
-      ctx.roundRect(BAR_X, (TITLE_H-BAR_H)/2, BAR_W, BAR_H, 2);
-      ctx.fill();
-      ctx.fillStyle = '#1a2e28';
-      ctx.font = `bold 28px "Microsoft JhengHei",Arial,sans-serif`;
-      ctx.textBaseline = 'middle';
-      ctx.textAlign = 'left';
-      ctx.fillText(title, TEXT_X, TITLE_H / 2);
-      ctx.strokeStyle = '#d6ede5';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(CARD_PAD, TITLE_H);
-      ctx.lineTo(cw - CARD_PAD, TITLE_H);
-      ctx.stroke();
-      ctx.drawImage(canvas, CARD_PAD, TITLE_H + SEP_GAP);
-      images.push({ dataUrl: tmp.toDataURL('image/jpeg', 0.92), w: cw, h: ch, title });
+      // 把 chartInstances 的圖片載入後合成標題
+      await new Promise(resolve => {
+        const chartImg = new Image();
+        chartImg.onload = () => {
+          const CHART_W = 1200, CHART_H = 600;
+          const TITLE_H = 70, PAD = 20, BAR_W = 5, BAR_H = 20;
+          const cw = CHART_W + PAD * 2;
+          const ch = CHART_H + TITLE_H + PAD;
+          const tmp = document.createElement('canvas');
+          tmp.width = cw; tmp.height = ch;
+          const ctx = tmp.getContext('2d');
+          // 背景
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, cw, ch);
+          // 標題裝飾線
+          const barGrad = ctx.createLinearGradient(0, 0, 0, BAR_H);
+          barGrad.addColorStop(0,'#8fba2e'); barGrad.addColorStop(0.5,'#2aac8a'); barGrad.addColorStop(1,'#1a9fbe');
+          ctx.fillStyle = barGrad;
+          ctx.beginPath();
+          ctx.roundRect(PAD, (TITLE_H - BAR_H) / 2, BAR_W, BAR_H, 2);
+          ctx.fill();
+          // 標題文字
+          ctx.fillStyle = '#1a2e28';
+          ctx.font = `bold 32px "Microsoft JhengHei","Noto Sans TC",Arial,sans-serif`;
+          ctx.textBaseline = 'middle';
+          ctx.textAlign = 'left';
+          ctx.fillText(title, PAD + BAR_W + 10, TITLE_H / 2);
+          // 分隔線
+          ctx.strokeStyle = '#d6ede5';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(PAD, TITLE_H); ctx.lineTo(cw - PAD, TITLE_H);
+          ctx.stroke();
+          // 圖表畫入（等比填滿）
+          const scale = Math.min(CHART_W / chartImg.width, CHART_H / chartImg.height);
+          const dw = chartImg.width * scale, dh = chartImg.height * scale;
+          const dx = PAD + (CHART_W - dw) / 2, dy = TITLE_H + (CHART_H - dh) / 2;
+          ctx.drawImage(chartImg, dx, dy, dw, dh);
+          images.push({ dataUrl: tmp.toDataURL('image/jpeg', 0.93), w: cw, h: ch, title });
+          resolve();
+        };
+        chartImg.onerror = () => {
+          // 直接用原圖
+          images.push({ dataUrl: imgDataUrl, w: 1200, h: 600, title });
+          resolve();
+        };
+        chartImg.src = imgDataUrl;
+      });
     }
 
     // 排版：每頁 2 張，左右各半
