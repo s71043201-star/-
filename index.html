@@ -927,7 +927,7 @@ function buildWeeklyCharts(mode){
       options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:24}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${label}：${c.parsed.y} 筆`}}},scales:xyScales()}
     });
     chartInstances['weeklyBar']  = mkLine('weeklyBarChart',  presData,'#2aac8a','開立數');
-    chartInstances['weeklyExec'] = mkLine('weeklyExecChart', execData,'#1a9fbe','執行數');
+    chartInstances['weeklyExec'] = mkLine('weeklyExecChart', execData,'#e8930a','執行數');
     return;
   }
   const mkBar=(id,data,bg,border,label)=>{
@@ -939,7 +939,7 @@ function buildWeeklyCharts(mode){
     });
   };
   chartInstances['weeklyBar']  = mkBar('weeklyBarChart',  presData,'rgba(42,172,138,0.75)','#2aac8a','開立數');
-  chartInstances['weeklyExec'] = mkBar('weeklyExecChart', execData,'rgba(26,159,190,0.75)','#1a9fbe','執行數');
+  chartInstances['weeklyExec'] = mkBar('weeklyExecChart', execData,'rgba(232,147,10,0.80)','#e8930a','執行數');
 }
 
 // ══════════════════════════════════════════════
@@ -992,7 +992,7 @@ function buildTypeCharts(mode){
       }
     });
     chartInstances['cumP']=mkLine('cumPrescribeChart',cumPres,'#3182ce','累積開立數');
-    chartInstances['cumE']=mkLine('cumExecChart',     cumExec,'#38a169','累積執行數');
+    chartInstances['cumE']=mkLine('cumExecChart',     cumExec,'#e8930a','累積執行數');
   }
   if(mode==='pie'||mode==='doughnut'){
     document.getElementById('type-pie-view').classList.remove('hidden');
@@ -1018,7 +1018,7 @@ function buildTypeCharts(mode){
     document.getElementById('type-hbar-view').classList.remove('hidden');
     chartInstances['hbarType']=new Chart(document.getElementById('hbarTypeChart').getContext('2d'),{
       type:'bar',plugins:[barLabelPlugin],
-      data:{labels:types,datasets:[{label:'開立數',data:typeStats.map(d=>d.開立數),backgroundColor:'rgba(42,172,138,0.8)',borderRadius:4},{label:'執行數',data:typeStats.map(d=>d.執行數),backgroundColor:'rgba(26,159,190,0.8)',borderRadius:4}]},
+      data:{labels:types,datasets:[{label:'開立數',data:typeStats.map(d=>d.開立數),backgroundColor:'rgba(42,172,138,0.8)',borderRadius:4},{label:'執行數',data:typeStats.map(d=>d.執行數),backgroundColor:'rgba(232,147,10,0.85)',borderRadius:4}]},
       options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,layout:{padding:{right:48}},plugins:{legend:{position:'top',labels:{font:defaultFont}},tooltip:{callbacks:{label:c=>` ${c.dataset.label}：${c.parsed.x} 筆`}}},scales:xyScales(true)}
     });
     chartInstances['hbarRate']=new Chart(document.getElementById('hbarRateChart').getContext('2d'),{
@@ -1048,7 +1048,7 @@ function buildTypeWeeklyCharts(mode){
       const canvasId='twHbar'+i;if(!document.getElementById(canvasId))return;
       chartInstances['twHbar'+i]=new Chart(document.getElementById(canvasId).getContext('2d'),{
         type:'bar',plugins:[barLabelPlugin],
-        data:{labels:[...weeks].reverse(),datasets:[{label:'開立數',data:[...presData].reverse(),backgroundColor:'rgba(42,172,138,0.8)',borderRadius:4},{label:'執行數',data:[...execData].reverse(),backgroundColor:TYPE_COLORS_A[i],borderRadius:4}]},
+        data:{labels:[...weeks].reverse(),datasets:[{label:'開立數',data:[...presData].reverse(),backgroundColor:'rgba(42,172,138,0.85)',borderRadius:4},{label:'執行數',data:[...execData].reverse(),backgroundColor:'rgba(232,147,10,0.85)',borderRadius:4}]},
         options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,layout:{padding:{right:48}},plugins:{legend:{position:'top',labels:{font:smFont,boxWidth:12,padding:8}},tooltip:{callbacks:{label:c=>` ${c.dataset.label}：${c.parsed.x} 筆`}}},scales:{x:{ticks:{font:smFont},beginAtZero:true,grid:{color:'#e2e8f0'}},y:{ticks:{font:smFont,autoSkip:false,maxTicksLimit:999},grid:{display:false}}}}
       });
     });
@@ -1064,15 +1064,15 @@ function buildTypeWeeklyCharts(mode){
     if(isBar){
       chartInstances['tw'+i]=new Chart(document.getElementById(canvasId).getContext('2d'),{
         type:'bar',plugins:[barLabelPlugin],
-        data:{labels:weeks,datasets:[{label:'開立數',data:presData,backgroundColor:'rgba(49,130,206,0.7)',borderRadius:4},{label:'執行數',data:execData,backgroundColor:TYPE_COLORS_A[i],borderRadius:4}]},
+        data:{labels:weeks,datasets:[{label:'開立數',data:presData,backgroundColor:'rgba(42,172,138,0.85)',borderRadius:4},{label:'執行數',data:execData,backgroundColor:'rgba(232,147,10,0.85)',borderRadius:4}]},
         options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:20}},plugins:{legend:{position:'top',labels:{font:smFont,boxWidth:12,padding:8}},tooltip:{callbacks:{label:c=>` ${c.dataset.label}：${c.parsed.y} 筆`}}},scales:{x:{ticks:{font:smFont,maxRotation:45,autoSkip:false,maxTicksLimit:999},grid:{display:false}},y:{ticks:{font:smFont},beginAtZero:true,grid:{color:'#e2e8f0'}}}}
       });
     } else {
       chartInstances['tw'+i]=new Chart(document.getElementById(canvasId).getContext('2d'),{
         type:'line',plugins:[lineLabelPlugin],
         data:{labels:weeks,datasets:[
-          {label:'開立數',data:presData,borderColor:'#2aac8a',backgroundColor:'rgba(49,130,206,0.08)',pointRadius:4,pointBackgroundColor:'#2aac8a',pointBorderColor:'#fff',pointBorderWidth:2,tension:0.3,borderWidth:2,fill:isFill},
-          {label:'執行數',data:execData,borderColor:TYPE_COLORS[i],backgroundColor:TYPE_COLORS[i]+'20',pointRadius:4,pointBackgroundColor:TYPE_COLORS[i],pointBorderColor:'#fff',pointBorderWidth:2,tension:0.3,borderWidth:2,fill:isFill}
+          {label:'開立數',data:presData,borderColor:'#2aac8a',backgroundColor:'rgba(42,172,138,0.10)',pointRadius:4,pointBackgroundColor:'#2aac8a',pointBorderColor:'#fff',pointBorderWidth:2,tension:0.3,borderWidth:2,fill:isFill},
+          {label:'執行數',data:execData,borderColor:'#e8930a',backgroundColor:'rgba(232,147,10,0.10)',pointRadius:4,pointBackgroundColor:'#e8930a',pointBorderColor:'#fff',pointBorderWidth:2,tension:0.3,borderWidth:2,fill:isFill}
         ]},
         options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:24}},plugins:{legend:{position:'top',labels:{font:smFont,boxWidth:12,padding:8}},tooltip:{callbacks:{label:c=>` ${c.dataset.label}：${c.parsed.y} 筆`}}},scales:{x:{ticks:{font:smFont,maxRotation:45,autoSkip:false,maxTicksLimit:999},grid:{display:false}},y:{ticks:{font:smFont},beginAtZero:true,grid:{color:'#e2e8f0'}}}}
       });
@@ -1439,12 +1439,12 @@ const PDF_CHART_GROUPS = [
     groupLabel: '📊 處方開立分析',
     tabId: 'tab-type',
     charts: [
-      { id: 'cum-pres',  label: '處方開立數累積趨勢（依週）' },
-      { id: 'cum-exec',  label: '執行數累積趨勢（依週）' },
-      { id: 'pie-pres',  label: '各類型開立數佔比' },
-      { id: 'pie-exec',  label: '各類型執行數佔比' },
-      { id: 'hbar-type', label: '各類型開立數 vs 執行數（橫條對比）' },
-      { id: 'hbar-rate', label: '各類型執行率（%）' },
+      { id: 'cum-pres',  label: '處方開立數累積趨勢（依週）', modes: ['line'] },
+      { id: 'cum-exec',  label: '執行數累積趨勢（依週）',     modes: ['line'] },
+      { id: 'pie-pres',  label: '各類型開立數佔比',           modes: ['pie','doughnut'] },
+      { id: 'pie-exec',  label: '各類型執行數佔比',           modes: ['pie','doughnut'] },
+      { id: 'hbar-type', label: '各類型開立數 vs 執行數（橫條對比）', modes: ['hbar'] },
+      { id: 'hbar-rate', label: '各類型執行率（%）',          modes: ['hbar'] },
     ]
   },
   {
@@ -1452,14 +1452,14 @@ const PDF_CHART_GROUPS = [
     groupLabel: '🔎 各類型週趨勢細項',
     tabId: 'tab-typeweekly',
     charts: [
-      { id: 'tw-0',    label: '情緒調適處方週趨勢' },
-      { id: 'tw-1',    label: '營養處方週趨勢' },
-      { id: 'tw-2',    label: '社會處方週趨勢' },
-      { id: 'tw-3',    label: '運動處方週趨勢' },
-      { id: 'tw-hb-0', label: '情緒調適處方（橫條）' },
-      { id: 'tw-hb-1', label: '營養處方（橫條）' },
-      { id: 'tw-hb-2', label: '社會處方（橫條）' },
-      { id: 'tw-hb-3', label: '運動處方（橫條）' },
+      { id: 'tw-0',    label: '情緒調適處方週趨勢', modes: ['line','bar','area'] },
+      { id: 'tw-1',    label: '營養處方週趨勢',     modes: ['line','bar','area'] },
+      { id: 'tw-2',    label: '社會處方週趨勢',     modes: ['line','bar','area'] },
+      { id: 'tw-3',    label: '運動處方週趨勢',     modes: ['line','bar','area'] },
+      { id: 'tw-hb-0', label: '情緒調適處方（橫條）', modes: ['hbar'] },
+      { id: 'tw-hb-1', label: '營養處方（橫條）',     modes: ['hbar'] },
+      { id: 'tw-hb-2', label: '社會處方（橫條）',     modes: ['hbar'] },
+      { id: 'tw-hb-3', label: '運動處方（橫條）',     modes: ['hbar'] },
     ]
   },
   {
@@ -1555,11 +1555,30 @@ function buildPdfChecklist() {
   filtered.forEach(chart => {
     const isChecked = pdfChecked.has(chart.id);
     const sectionEl = document.querySelector(`[data-pdf-id="${chart.id}"]`);
-    const isAvailable = sectionEl !== null;
 
-    // 用 div 避免 label+checkbox 雙重觸發問題
+    // 判斷是否符合目前選定的圖表模式
+    let modeOk = true;
+    let modeHint = '';
+    if (chart.modes) {
+      if (chart.groupId === 'type') {
+        modeOk = chart.modes.includes(currentChartType['type']);
+        if (!modeOk) {
+          const modeNames = { line:'折線累積', pie:'圓餅圖', doughnut:'甜甜圈', hbar:'橫條對比' };
+          modeHint = `需切換至「${chart.modes.map(m=>modeNames[m]||m).join('／')}」模式`;
+        }
+      } else if (chart.groupId === 'typeweekly') {
+        modeOk = chart.modes.includes(currentChartType['typeweekly']);
+        if (!modeOk) {
+          const modeNames = { line:'折線圖', bar:'直條群組', area:'面積圖', hbar:'橫條對比' };
+          modeHint = `需切換至「${chart.modes.map(m=>modeNames[m]||m).join('／')}」模式`;
+        }
+      }
+    }
+
+    const isAvailable = sectionEl !== null && modeOk;
+
     const item = document.createElement('div');
-    item.className = 'pdf-check-item' + (isChecked ? ' checked' : '');
+    item.className = 'pdf-check-item' + (isChecked ? ' checked' : '') + (!modeOk ? ' mode-mismatch' : '');
     item.style.opacity = isAvailable ? '1' : '0.4';
     item.style.cursor = isAvailable ? 'pointer' : 'default';
     const groupName = chart.groupLabel.replace(/^[\S]+\s/, '');
@@ -1567,7 +1586,7 @@ function buildPdfChecklist() {
       <div class="pdf-check-box"></div>
       <div class="pdf-check-text">
         ${chart.label}
-        <small>${groupName}</small>
+        <small>${modeHint || groupName}</small>
       </div>
     `;
     if (isAvailable) {
@@ -1598,12 +1617,17 @@ function updatePdfCount() {
   document.getElementById('pdf-confirm-btn').disabled = pdfChecked.size === 0;
 }
 
-// 全選/全不選：只對目前篩選範圍
+// 全選/全不選：只對目前篩選範圍且模式符合的圖表
 function pdfSelectFiltered(checked) {
   const filtered = getFilteredCharts();
   filtered.forEach(chart => {
     const sectionEl = document.querySelector(`[data-pdf-id="${chart.id}"]`);
     if (!sectionEl) return;
+    // 模式檢查
+    if (chart.modes) {
+      if (chart.groupId === 'type' && !chart.modes.includes(currentChartType['type'])) return;
+      if (chart.groupId === 'typeweekly' && !chart.modes.includes(currentChartType['typeweekly'])) return;
+    }
     if (checked) pdfChecked.add(chart.id);
     else pdfChecked.delete(chart.id);
   });
