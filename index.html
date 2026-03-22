@@ -1607,31 +1607,62 @@ async function startPdfExport() {
   progressBar.style.width = '0%';
 
   try {
-    // 收集所有勾選圖表（直接從 chartInstances 取圖，不動 DOM）
+    // 收集所有勾選圖表
+    // 策略：先切換到各頁籤讓 Chart.js 用正確尺寸渲染，再用 canvas.toDataURL() 取圖
     const selectedSections = [];
-    PDF_CHART_GROUPS.forEach(group => {
-      group.charts.forEach(chart => {
-        if (!pdfChecked.has(chart.id)) return;
-        const instanceKey = PDF_CHART_INSTANCE_MAP[chart.id];
-        const instance = instanceKey ? chartInstances[instanceKey] : null;
-        // 從 Chart.js 實例直接取高解析度圖片
-        let imgDataUrl = null;
-        if (instance) {
-          imgDataUrl = instance.toBase64Image('image/jpeg', 0.95);
-        } else {
-          // fallback：從 DOM canvas 取（限目前可見頁籤）
-          const sectionEl = document.querySelector(`[data-pdf-id="${chart.id}"]`);
-          const canvas = sectionEl ? sectionEl.querySelector('canvas') : null;
-          if (canvas && canvas.width > 0) imgDataUrl = canvas.toDataURL('image/jpeg', 0.95);
+
+    // 記錄目前顯示的 tab
+    const tabNames = ['weekly','type','typeweekly','clinic'];
+    const activeTabEl = document.querySelector('.tab-btn.active');
+    const activeTabIdx = [...document.querySelectorAll('.tab-btn')].indexOf(activeTabEl);
+
+    // 依群組分批：同群組一起切換頁籤後擷取
+    for (const group of PDF_CHART_GROUPS) {
+      const chartsInGroup = group.charts.filter(c => pdfChecked.has(c.id));
+      if (!chartsInGroup.length) continue;
+
+      // 切換到該群組的頁籤
+      const tabEl = document.getElementById(group.tabId);
+      if (tabEl) {
+        // 先讓所有 tab 隱藏，只顯示這個
+        tabNames.forEach(t => document.getElementById('tab-'+t)?.classList.add('hidden'));
+        tabEl.classList.remove('hidden');
+
+        // 若是 type 群組，需確保正確的子 view 也顯示
+        if (group.groupId === 'type') {
+          const mode = currentChartType['type'];
+          ['type-line-view','type-pie-view','type-hbar-view'].forEach(v => document.getElementById(v)?.classList.add('hidden'));
+          if (mode === 'line') document.getElementById('type-line-view')?.classList.remove('hidden');
+          else if (mode === 'pie' || mode === 'doughnut') document.getElementById('type-pie-view')?.classList.remove('hidden');
+          else if (mode === 'hbar') document.getElementById('type-hbar-view')?.classList.remove('hidden');
         }
-        if (!imgDataUrl) return;
-        // 取標題
+        if (group.groupId === 'typeweekly') {
+          const mode = currentChartType['typeweekly'];
+          ['tw-multi-view','tw-hbar-view'].forEach(v => document.getElementById(v)?.classList.add('hidden'));
+          if (mode === 'hbar') document.getElementById('tw-hbar-view')?.classList.remove('hidden');
+          else document.getElementById('tw-multi-view')?.classList.remove('hidden');
+        }
+
+        // 等 Chart.js resize 完成
+        await new Promise(r => setTimeout(r, 200));
+      }
+
+      for (const chart of chartsInGroup) {
         const sectionEl = document.querySelector(`[data-pdf-id="${chart.id}"]`);
-        const titleEl = sectionEl ? sectionEl.querySelector('h2') : null;
+        if (!sectionEl) continue;
+        const canvas = sectionEl.querySelector('canvas');
+        if (!canvas || canvas.width === 0 || canvas.height === 0) continue;
+        const titleEl = sectionEl.querySelector('h2');
         const title = titleEl ? titleEl.textContent.trim() : chart.label;
+        const imgDataUrl = canvas.toDataURL('image/png');
         selectedSections.push({ imgDataUrl, title, id: chart.id });
-      });
-    });
+      }
+    }
+
+    // 還原原本的 tab
+    tabNames.forEach(t => document.getElementById('tab-'+t)?.classList.add('hidden'));
+    const origTabId = 'tab-' + (tabNames[activeTabIdx] || 'weekly');
+    document.getElementById(origTabId)?.classList.remove('hidden');
 
     if (selectedSections.length === 0) {
       alert('所選圖表目前無資料，請先上傳 Excel 再匯出。');
@@ -1725,19 +1756,19 @@ async function startPdfExport() {
       cx.fillStyle = grad; cx.fillRect(0, 0, W, 10);
       // 標題（用系統字體確保中文正常）
       cx.fillStyle = '#1a2e28';
-      cx.font = 'bold 54px sans-serif';
+      cx.font = 'bold 38px sans-serif';
       cx.textBaseline = 'alphabetic'; cx.textAlign = 'left';
-      cx.fillText('健康處方開立統計儀表板', 20, 80);
+      cx.fillText('健康處方開立統計儀表板', 20, 68);
       // 週次備註
       cx.fillStyle = '#5a8a74';
-      cx.font = '36px sans-serif';
-      cx.fillText('週次定義：每週六起算至下週五結束', 20, 118);
+      cx.font = '26px sans-serif';
+      cx.fillText('週次定義：每週六起算至下週五結束', 20, 100);
       // 右側：匯出日期 + 頁碼
       const dateStr = new Date().toLocaleDateString('zh-TW');
       cx.fillStyle = '#3a6a58';
-      cx.font = '40px sans-serif';
+      cx.font = '28px sans-serif';
       cx.textAlign = 'right';
-      cx.fillText(`匯出日期：${dateStr}   第 ${pageNum} 頁 / 共 ${totalPages} 頁`, W - 20, 80);
+      cx.fillText(`匯出日期：${dateStr}   第 ${pageNum} 頁 / 共 ${totalPages} 頁`, W - 20, 68);
       return c.toDataURL('image/png');
     }
 
