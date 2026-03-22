@@ -1555,30 +1555,10 @@ function buildPdfChecklist() {
   filtered.forEach(chart => {
     const isChecked = pdfChecked.has(chart.id);
     const sectionEl = document.querySelector(`[data-pdf-id="${chart.id}"]`);
-
-    // 判斷是否符合目前選定的圖表模式
-    let modeOk = true;
-    let modeHint = '';
-    if (chart.modes) {
-      if (chart.groupId === 'type') {
-        modeOk = chart.modes.includes(currentChartType['type']);
-        if (!modeOk) {
-          const modeNames = { line:'折線累積', pie:'圓餅圖', doughnut:'甜甜圈', hbar:'橫條對比' };
-          modeHint = `需切換至「${chart.modes.map(m=>modeNames[m]||m).join('／')}」模式`;
-        }
-      } else if (chart.groupId === 'typeweekly') {
-        modeOk = chart.modes.includes(currentChartType['typeweekly']);
-        if (!modeOk) {
-          const modeNames = { line:'折線圖', bar:'直條群組', area:'面積圖', hbar:'橫條對比' };
-          modeHint = `需切換至「${chart.modes.map(m=>modeNames[m]||m).join('／')}」模式`;
-        }
-      }
-    }
-
-    const isAvailable = sectionEl !== null && modeOk;
+    const isAvailable = sectionEl !== null;
 
     const item = document.createElement('div');
-    item.className = 'pdf-check-item' + (isChecked ? ' checked' : '') + (!modeOk ? ' mode-mismatch' : '');
+    item.className = 'pdf-check-item' + (isChecked ? ' checked' : '');
     item.style.opacity = isAvailable ? '1' : '0.4';
     item.style.cursor = isAvailable ? 'pointer' : 'default';
     const groupName = chart.groupLabel.replace(/^[\S]+\s/, '');
@@ -1586,7 +1566,7 @@ function buildPdfChecklist() {
       <div class="pdf-check-box"></div>
       <div class="pdf-check-text">
         ${chart.label}
-        <small>${modeHint || groupName}</small>
+        <small>${groupName}</small>
       </div>
     `;
     if (isAvailable) {
@@ -1617,17 +1597,12 @@ function updatePdfCount() {
   document.getElementById('pdf-confirm-btn').disabled = pdfChecked.size === 0;
 }
 
-// 全選/全不選：只對目前篩選範圍且模式符合的圖表
+// 全選/全不選：對目前篩選範圍的所有圖表
 function pdfSelectFiltered(checked) {
   const filtered = getFilteredCharts();
   filtered.forEach(chart => {
     const sectionEl = document.querySelector(`[data-pdf-id="${chart.id}"]`);
     if (!sectionEl) return;
-    // 模式檢查
-    if (chart.modes) {
-      if (chart.groupId === 'type' && !chart.modes.includes(currentChartType['type'])) return;
-      if (chart.groupId === 'typeweekly' && !chart.modes.includes(currentChartType['typeweekly'])) return;
-    }
     if (checked) pdfChecked.add(chart.id);
     else pdfChecked.delete(chart.id);
   });
