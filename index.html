@@ -707,9 +707,9 @@ if (isConfigured) {
 }
 
 // 全域關閉 Chart.js 動畫（確保截圖時圖表完整渲染）
-Chart.defaults.animation = false;
-Chart.defaults.animations = false;
-Chart.defaults.transitions = {};
+if (typeof Chart !== 'undefined') {
+  Chart.defaults.animation = false;
+}
 
 // ══════════════════════════════════════════════
 //  色彩常數
@@ -750,7 +750,7 @@ async function loadFromCloud() {
     const { data, error } = await sbClient
       .from('prescription_data').select('*').eq('id','main').single();
     if (error || !data) {
-      setCloudStatus('error', '❌ 讀取失敗：' + (error?.message || '資料表尚無資料，請先上傳 Excel'));
+      setCloudStatus('error', '❌ 讀取失敗：' + (error && error.message || '資料表尚無資料，請先上傳 Excel'));
       return;
     }
     weeklyData    = data.weekly_data     || [];
@@ -800,7 +800,7 @@ async function incrementViewCount() {
   try {
     const weekKey = getThisWeekKey();
     const { data } = await sbClient.from('view_counts').select('count').eq('week_key',weekKey).single();
-    const newCount = (data?.count || 0) + 1;
+    const newCount = (data && data.count || 0) + 1;
     await sbClient.from('view_counts').upsert({ week_key: weekKey, count: newCount });
     document.getElementById('view-counter').textContent = `◉ 本週閱覽 ${newCount} 次`;
   } catch(e) {}
@@ -1326,7 +1326,7 @@ function parseExcel(file){
         });
         const newTWRaw=[];
         allTypes.forEach(t=>sw.forEach(wl=>{
-          const d=typeWeekMap[t]?.[wl];
+          const d=typeWeekMap[t] && typeWeekMap[t][wl];
           if(d)newTWRaw.push({week_label:wl,處方類型:t,開立數:d.開立數,執行數:d.執行數});
         }));
         const newClinicStats = Object.entries(clinicMap).map(([name, v]) => ({
@@ -1676,23 +1676,23 @@ async function startPdfExport() {
     for (const chartId of allChartIds) {
       const ctx = CHART_CONTEXT[chartId];
       if (!ctx) continue;
-      const ctxKey = ctx.tab + (ctx.subViews?.[0] || '');
+      const ctxKey = ctx.tab + (ctx.subViews && ctx.subViews[0] || '');
 
       // 只在需要切換時才切換，避免重複 rebuild
       if (ctxKey !== lastCtxKey) {
         // 隱藏所有 tab
-        tabNames.forEach(t => document.getElementById('tab-'+t)?.classList.add('hidden'));
+        tabNames.forEach(function(t){var el=document.getElementById('tab-'+t);if(el)el.classList.add('hidden')});
         // 顯示目標 tab
-        document.getElementById(ctx.tab)?.classList.remove('hidden');
+        (function(el){if(el)el.classList.remove('hidden')})(document.getElementById(ctx.tab));
         // 處理子 view
         if (ctx.subViews) {
-          ctx.hideSubViews?.forEach(v => document.getElementById(v)?.classList.add('hidden'));
-          ctx.subViews.forEach(v => document.getElementById(v)?.classList.remove('hidden'));
+          (ctx.hideSubViews||[]).forEach(function(v){var el=document.getElementById(v);if(el)el.classList.add('hidden')});
+          ctx.subViews.forEach(function(v){var el=document.getElementById(v);if(el)el.classList.remove('hidden')});
         }
         // 診所分析需要顯示 clinic-content
         if (ctx.clinicContent) {
-          document.getElementById('clinic-no-data')?.classList.add('hidden');
-          document.getElementById('clinic-content')?.classList.remove('hidden');
+          (function(el){if(el)el.classList.add('hidden')})(document.getElementById('clinic-no-data'));
+          (function(el){if(el)el.classList.remove('hidden')})(document.getElementById('clinic-content'));
         }
         // 強制重建圖表（確保 canvas 有正確尺寸）
         if (ctx.rebuildFn) ctx.rebuildFn();
@@ -1724,9 +1724,9 @@ async function startPdfExport() {
     }
 
     // 還原原本的 tab
-    tabNames.forEach(t => document.getElementById('tab-'+t)?.classList.add('hidden'));
+    tabNames.forEach(function(t){var el=document.getElementById('tab-'+t);if(el)el.classList.add('hidden')});
     const origTabId = 'tab-' + (tabNames[activeTabIdx] || 'weekly');
-    document.getElementById(origTabId)?.classList.remove('hidden');
+    (function(el){if(el)el.classList.remove('hidden')})(document.getElementById(origTabId));
     // 還原子 view 狀態
     buildTypeCharts(currentChartType['type']);
     buildTypeWeeklyCharts(currentChartType['typeweekly']);
