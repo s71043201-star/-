@@ -1259,10 +1259,12 @@ function renderPrescDayList(){
 
 function buildPrescDayCharts(){
   ['prescDayBar','prescDayLine'].forEach(k=>destroyChart(k));
-  // 決定資料來源：優先用手動加入的多筆；否則 fallback 到主資料的 typeStats
-  const src = prescDayDatasets.length ? prescDayDatasets
-    : (typeStats.length ? [{label:'目前資料', typeStats}] : []);
-  if(!src.length) return;
+  const src = prescDayDatasets;
+  if(!src.length){
+    document.getElementById('prescday-bar-title').textContent  = '各類處方執行數（直條圖）';
+    document.getElementById('prescday-line-title').textContent = '各類處方執行數（折線圖）';
+    return;
+  }
   // 取全部處方類型聯集（保持順序）
   const typeSet = [];
   src.forEach(ds=>ds.typeStats.forEach(r=>{ if(!typeSet.includes(r.處方類型)) typeSet.push(r.處方類型); }));
