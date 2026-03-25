@@ -528,6 +528,7 @@ footer {
   <button class="tab-btn" onclick="showTab('type',this)">📊 處方開立分析</button>
   <button class="tab-btn" onclick="showTab('typeweekly',this)">🔎 各類型週趨勢細項</button>
   <button class="tab-btn" onclick="showTab('clinic',this)">🏥 診所分析</button>
+  <button class="tab-btn" onclick="showTab('prescday',this)">📅 處方日執行率</button>
 </div>
 
 <!-- ═══ TAB 1 ═══ -->
@@ -640,6 +641,20 @@ footer {
   </div>
 </div>
 
+<!-- ═══ TAB 5：處方日執行率 ═══ -->
+<div id="tab-prescday" class="hidden">
+  <div class="side-by-side">
+    <div class="chart-section" data-pdf-id="prescday-bar" data-pdf-label="各類處方執行率（直條圖）">
+      <div class="chart-header"><h2>各類處方執行率（直條圖）</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div>
+      <div class="chart-wrap"><canvas id="prescDayBarChart"></canvas></div>
+    </div>
+    <div class="chart-section" data-pdf-id="prescday-line" data-pdf-label="各類處方執行率（折線圖）">
+      <div class="chart-header"><h2>各類處方執行率（折線圖）</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div>
+      <div class="chart-wrap"><canvas id="prescDayLineChart"></canvas></div>
+    </div>
+  </div>
+</div>
+
 <footer>健康處方開立統計儀表板 &nbsp;·&nbsp; ⬡ 資料儲存於 Supabase &nbsp;·&nbsp; ◈ 圖表由 Chart.js 製作</footer>
 
 <!-- ══════════════════════════════════
@@ -659,6 +674,7 @@ footer {
         <button class="pdf-tab-btn" onclick="setPdfFilter('type',this)">📊 開立分析</button>
         <button class="pdf-tab-btn" onclick="setPdfFilter('typeweekly',this)">🔎 週趨勢細項</button>
         <button class="pdf-tab-btn" onclick="setPdfFilter('clinic',this)">🏥 診所分析</button>
+        <button class="pdf-tab-btn" onclick="setPdfFilter('prescday',this)">📅 處方日執行率</button>
       </div>
       <!-- 全選 / 全不選（針對目前篩選範圍） -->
       <div class="pdf-select-all-row">
@@ -1186,11 +1202,53 @@ function setChartType(tab, mode, btn){
   if(tab==='typeweekly') buildTypeWeeklyCharts(mode);
 }
 
+function buildPrescDayCharts(){
+  ['prescDayBar','prescDayLine'].forEach(k=>destroyChart(k));
+  if(!typeStats.length) return;
+  const types = typeStats.map(d=>d.處方類型);
+  const rates = typeStats.map(d=>d.執行率);
+  // 直條圖
+  chartInstances['prescDayBar'] = new Chart(document.getElementById('prescDayBarChart').getContext('2d'),{
+    type:'bar', plugins:[barLabelPlugin],
+    data:{labels:types,datasets:[{
+      label:'執行率%', data:rates,
+      backgroundColor:TYPE_COLORS_A, borderColor:TYPE_COLORS, borderWidth:1.5, borderRadius:6
+    }]},
+    options:{
+      responsive:true, maintainAspectRatio:false, layout:{padding:{top:28}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` 執行率：${c.parsed.y}%`}}},
+      scales:{
+        x:{ticks:{font:defaultFont},grid:{display:false}},
+        y:{ticks:{font:defaultFont,callback:v=>v+'%'},min:0,max:100,beginAtZero:true,grid:{color:'#e2e8f0'}}
+      }
+    }
+  });
+  // 折線圖
+  chartInstances['prescDayLine'] = new Chart(document.getElementById('prescDayLineChart').getContext('2d'),{
+    type:'line', plugins:[lineLabelPlugin],
+    data:{labels:types,datasets:[{
+      label:'執行率%', data:rates,
+      borderColor:'#2aac8a', backgroundColor:'rgba(42,172,138,0.12)',
+      pointRadius:7, pointBackgroundColor:TYPE_COLORS, pointBorderColor:'#fff', pointBorderWidth:2,
+      tension:0.3, fill:true, borderWidth:2.5
+    }]},
+    options:{
+      responsive:true, maintainAspectRatio:false, layout:{padding:{top:28}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` 執行率：${c.parsed.y}%`}}},
+      scales:{
+        x:{ticks:{font:defaultFont},grid:{display:false}},
+        y:{ticks:{font:defaultFont,callback:v=>v+'%'},min:0,max:100,beginAtZero:true,grid:{color:'#e2e8f0'}}
+      }
+    }
+  });
+}
+
 function buildAllCharts(){
   buildWeeklyCharts(currentChartType.weekly);
   buildTypeCharts(currentChartType.type);
   buildTypeWeeklyCharts(currentChartType.typeweekly);
   buildClinicCharts();
+  buildPrescDayCharts();
 }
 
 // ══════════════════════════════════════════════
@@ -1384,11 +1442,12 @@ dz.addEventListener('drop', e=>{e.preventDefault();dz.classList.remove('drag-ove
 //  Tab 切換
 // ══════════════════════════════════════════════
 function showTab(name, btn){
-  ['weekly','type','typeweekly','clinic'].forEach(t=>document.getElementById('tab-'+t).classList.add('hidden'));
+  ['weekly','type','typeweekly','clinic','prescday'].forEach(t=>document.getElementById('tab-'+t).classList.add('hidden'));
   document.getElementById('tab-'+name).classList.remove('hidden');
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
   if(name==='clinic') setTimeout(()=>buildClinicCharts(), 50);
+  if(name==='prescday') setTimeout(()=>buildPrescDayCharts(), 50);
 }
 
 // ══════════════════════════════════════════════
