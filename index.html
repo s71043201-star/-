@@ -1602,6 +1602,15 @@ const PDF_CHART_GROUPS = [
       { id: 'clinic-bar',    label: '各診所開立數 vs 執行筆數' },
       { id: 'clinic-rate',   label: '各診所選課或執行比率（%）' },
     ]
+  },
+  {
+    groupId: 'prescday',
+    groupLabel: '📅 處方日執行數',
+    tabId: 'tab-prescday',
+    charts: [
+      { id: 'prescday-bar',  label: '各類處方執行數（直條圖）' },
+      { id: 'prescday-line', label: '各類處方執行數（折線圖）' },
+    ]
   }
 ];
 
@@ -1626,6 +1635,8 @@ const PDF_CHART_INSTANCE_MAP = {
   'clinic-enroll': 'clinicEnroll',
   'clinic-bar':    'clinicBar',
   'clinic-rate':   'clinicRate',
+  'prescday-bar':  'prescDayBar',
+  'prescday-line': 'prescDayLine',
 };
 
 let pdfChecked = new Set();
