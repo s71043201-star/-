@@ -658,11 +658,11 @@ footer {
   <!-- 圖表 -->
   <div class="side-by-side">
     <div class="chart-section" data-pdf-id="prescday-bar" data-pdf-label="各類處方執行數比較（直條圖）">
-      <div class="chart-header"><h2>各類處方執行數（直條圖）</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div>
+      <div class="chart-header"><h2 id="prescday-bar-title">各類處方執行數（直條圖）</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div>
       <div class="chart-wrap"><canvas id="prescDayBarChart"></canvas></div>
     </div>
     <div class="chart-section" data-pdf-id="prescday-line" data-pdf-label="各類處方執行數比較（折線圖）">
-      <div class="chart-header"><h2>各類處方執行數（折線圖）</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div>
+      <div class="chart-header"><h2 id="prescday-line-title">各類處方執行數（折線圖）</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div>
       <div class="chart-wrap"><canvas id="prescDayLineChart"></canvas></div>
     </div>
   </div>
@@ -1267,6 +1267,11 @@ function buildPrescDayCharts(){
   const typeSet = [];
   src.forEach(ds=>ds.typeStats.forEach(r=>{ if(!typeSet.includes(r.處方類型)) typeSet.push(r.處方類型); }));
   const multi = src.length > 1;
+  const fileNames = src.map(ds=>ds.label).join('、');
+  const barTitle  = `各類處方執行數（直條圖）— ${fileNames}`;
+  const lineTitle = `各類處方執行數（折線圖）— ${fileNames}`;
+  document.getElementById('prescday-bar-title').textContent  = barTitle;
+  document.getElementById('prescday-line-title').textContent = lineTitle;
   const yScales = {
     x:{ticks:{font:defaultFont},grid:{display:false}},
     y:{ticks:{font:defaultFont},beginAtZero:true,grid:{color:'#e2e8f0'}}
