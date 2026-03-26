@@ -656,6 +656,10 @@ footer {
     <div id="prescDayList" style="font-size:0.85rem;color:var(--text-muted)">尚未加入任何處方日資料</div>
   </div>
   <!-- 處方類型執行數圖表 -->
+  <div id="prescDayTypeSelector" style="display:none;margin:0 36px 10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <span style="font-size:0.9rem;font-weight:600;color:var(--text-muted)">顯示檔案：</span>
+    <div id="prescDayTypeBtns" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+  </div>
   <div class="side-by-side">
     <div class="chart-section" data-pdf-id="prescday-bar" data-pdf-label="各類處方執行數比較（直條圖）">
       <div class="chart-header"><h2 id="prescday-bar-title">各類處方執行數（直條圖）</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div>
@@ -769,7 +773,8 @@ const chartInstances = {};
 const currentChartType = {weekly:'bar', type:'line', typeweekly:'line'};
 let currentClinicSort = 'prescribe';
 let prescDayDatasets = (()=>{try{return JSON.parse(localStorage.getItem('prescDayDatasets')||'[]');}catch{return[];}})(); // [{label, typeStats, courseStats, colorIdx}]
-let prescDayCourseSelected = null; // 目前選擇顯示的課程資料集 colorIdx，null=全部
+let prescDayCourseSelected = new Set(); // 勾選顯示的課程資料集 colorIdx，空=全部
+let prescDayTypeSelected   = new Set(); // 勾選顯示的處方類型資料集 colorIdx，空=全部
 
 // ══════════════════════════════════════════════
 //  資料狀態
@@ -1299,16 +1304,16 @@ function buildPrescDayCourseCharts(){
   const btnsEl = document.getElementById('prescDayCourseBtns');
   if(all.length>1){
     selectorWrap.style.display='flex';
-    if(prescDayCourseSelected!==null && !all.find(d=>d.colorIdx===prescDayCourseSelected)) prescDayCourseSelected=null;
-    btnsEl.innerHTML = [['null','全部顯示'], ...all.map(ds=>[String(ds.colorIdx), ds.label])].map(([val,lbl])=>{
-      const active = String(prescDayCourseSelected)===val;
-      const color = val==='null' ? '#4a7a6d' : DATE_COLORS[Number(val)%DATE_COLORS.length];
-      return `<button onclick="selectPrescDayCourse(${val})" style="padding:4px 12px;border-radius:20px;font-size:0.82rem;font-weight:600;cursor:pointer;border:1.5px solid ${color};background:${active?color:'transparent'};color:${active?'#fff':color};font-family:inherit">${lbl}</button>`;
+    [...prescDayCourseSelected].forEach(idx=>{ if(!all.find(d=>d.colorIdx===idx)) prescDayCourseSelected.delete(idx); });
+    btnsEl.innerHTML = all.map(ds=>{
+      const active = prescDayCourseSelected.size===0 || prescDayCourseSelected.has(ds.colorIdx);
+      const color = DATE_COLORS[ds.colorIdx%DATE_COLORS.length];
+      return `<button onclick="selectPrescDayCourse(${ds.colorIdx})" style="padding:4px 12px;border-radius:20px;font-size:0.82rem;font-weight:600;cursor:pointer;border:1.5px solid ${color};background:${active?color:'transparent'};color:${active?'#fff':color};font-family:inherit">${ds.label}</button>`;
     }).join('');
   } else {
     selectorWrap.style.display='none';
   }
-  const src = prescDayCourseSelected!==null ? all.filter(ds=>ds.colorIdx===prescDayCourseSelected) : all;
+  const src = prescDayCourseSelected.size>0 ? all.filter(ds=>prescDayCourseSelected.has(ds.colorIdx)) : all;
   if(!src.length){
     document.getElementById('prescday-course-bar-title').textContent  = '各課程參與人數（直條圖）';
     document.getElementById('prescday-course-line-title').textContent = '各課程參與人數（折線圖）';
@@ -1360,8 +1365,15 @@ function buildPrescDayCourseCharts(){
   });
 }
 
-function selectPrescDayCourse(val){
-  prescDayCourseSelected = val===null ? null : Number(val);
+function selectPrescDayType(colorIdx){
+  if(prescDayTypeSelected.has(colorIdx)) prescDayTypeSelected.delete(colorIdx);
+  else prescDayTypeSelected.add(colorIdx);
+  buildPrescDayCharts();
+}
+
+function selectPrescDayCourse(colorIdx){
+  if(prescDayCourseSelected.has(colorIdx)) prescDayCourseSelected.delete(colorIdx);
+  else prescDayCourseSelected.add(colorIdx);
   buildPrescDayCourseCharts();
 }
 
@@ -1391,7 +1403,23 @@ function renderPrescDayList(){
 
 function buildPrescDayCharts(){
   ['prescDayBar','prescDayLine'].forEach(k=>destroyChart(k));
-  const src = prescDayDatasets;
+  const all = prescDayDatasets;
+  // 更新選擇按鈕
+  const selectorWrap = document.getElementById('prescDayTypeSelector');
+  const btnsEl = document.getElementById('prescDayTypeBtns');
+  if(all.length>1){
+    selectorWrap.style.display='flex';
+    // 移除已不存在的 colorIdx
+    [...prescDayTypeSelected].forEach(idx=>{ if(!all.find(d=>d.colorIdx===idx)) prescDayTypeSelected.delete(idx); });
+    btnsEl.innerHTML = all.map(ds=>{
+      const active = prescDayTypeSelected.size===0 || prescDayTypeSelected.has(ds.colorIdx);
+      const color = DATE_COLORS[ds.colorIdx%DATE_COLORS.length];
+      return `<button onclick="selectPrescDayType(${ds.colorIdx})" style="padding:4px 12px;border-radius:20px;font-size:0.82rem;font-weight:600;cursor:pointer;border:1.5px solid ${color};background:${active?color:'transparent'};color:${active?'#fff':color};font-family:inherit">${ds.label}</button>`;
+    }).join('');
+  } else {
+    selectorWrap.style.display='none';
+  }
+  const src = prescDayTypeSelected.size>0 ? all.filter(ds=>prescDayTypeSelected.has(ds.colorIdx)) : all;
   if(!src.length){
     document.getElementById('prescday-bar-title').textContent  = '各類處方執行數（直條圖）';
     document.getElementById('prescday-line-title').textContent = '各類處方執行數（折線圖）';
