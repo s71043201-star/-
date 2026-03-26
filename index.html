@@ -532,7 +532,7 @@ footer {
 </div>
 
 <!-- 日期篩選列 -->
-<div id="dateFilterBar" style="display:none;margin:12px 36px;padding:10px 16px;background:var(--card);border-radius:10px;border:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+<div id="dateFilterBar" style="display:none;margin:12px 36px;padding:10px 16px;background:var(--card);border-radius:10px;border:1px solid var(--border);align-items:center;gap:12px;flex-wrap:wrap">
   <span style="font-size:0.88rem;font-weight:700;color:var(--teal);white-space:nowrap">📅 篩選開立日期：</span>
   <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
     <input type="date" id="filterFrom" style="padding:5px 10px;border-radius:7px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;font-family:inherit">
@@ -1647,18 +1647,22 @@ function updateDateFilterRange(){
 }
 
 function applyDateFilter(){
+  if(!rawRows.length){ alert('請先上傳 Excel 檔案才能使用篩選'); return; }
   const from = document.getElementById('filterFrom').value;
   const to   = document.getElementById('filterTo').value;
   if(!from && !to){ clearDateFilter(); return; }
-  let filtered = rawRows;
-  if(from) filtered = filtered.filter(r=>r.prescDate >= from);
-  if(to)   filtered = filtered.filter(r=>r.prescDate <= to);
+  let filtered = rawRows.filter(r=>{
+    if(from && r.prescDate < from) return false;
+    if(to   && r.prescDate > to)   return false;
+    return true;
+  });
+  if(!filtered.length){ alert(`所選區間（${from||'起始'}～${to||'結束'}）沒有資料`); return; }
   const result = aggregateRawRows(filtered);
   weeklyData=result.newWeeklyData; typeStats=result.newTypeStats;
   typeWeeklyRaw=result.newTWRaw; clinicStats=result.newClinicStats;
   buildAllCharts(); updateSummary();
   document.getElementById('filterStatus').textContent =
-    `已篩選 ${filtered.length.toLocaleString()} / ${rawRows.length.toLocaleString()} 筆　區間：${result.dateRange}`;
+    `已篩選 ${filtered.length.toLocaleString()} / ${rawRows.length.toLocaleString()} 筆`;
 }
 
 function clearDateFilter(){
