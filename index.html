@@ -667,6 +667,10 @@ footer {
     </div>
   </div>
   <!-- 課程人數圖表 -->
+  <div id="prescDayCourseSelector" style="display:none;margin:0 36px 10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <span style="font-size:0.9rem;font-weight:600;color:var(--text-muted)">顯示檔案：</span>
+    <div id="prescDayCourseBtns" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+  </div>
   <div class="side-by-side">
     <div class="chart-section" data-pdf-id="prescday-course-bar" data-pdf-label="各課程參與人數（直條圖）">
       <div class="chart-header"><h2 id="prescday-course-bar-title">各課程參與人數（直條圖）</h2><button class="dl-btn" onclick="downloadChart(this)">↓ 下載 JPG</button></div>
@@ -765,6 +769,7 @@ const chartInstances = {};
 const currentChartType = {weekly:'bar', type:'line', typeweekly:'line'};
 let currentClinicSort = 'prescribe';
 let prescDayDatasets = (()=>{try{return JSON.parse(localStorage.getItem('prescDayDatasets')||'[]');}catch{return[];}})(); // [{label, typeStats, courseStats, colorIdx}]
+let prescDayCourseSelected = null; // 目前選擇顯示的課程資料集 colorIdx，null=全部
 
 // ══════════════════════════════════════════════
 //  資料狀態
@@ -1288,7 +1293,22 @@ async function addPrescDayDataset(){
 
 function buildPrescDayCourseCharts(){
   ['prescDayCourseBar','prescDayCourseLine'].forEach(k=>destroyChart(k));
-  const src = prescDayDatasets.filter(ds=>ds.courseStats&&ds.courseStats.length);
+  const all = prescDayDatasets.filter(ds=>ds.courseStats&&ds.courseStats.length);
+  // 更新選擇按鈕
+  const selectorWrap = document.getElementById('prescDayCourseSelector');
+  const btnsEl = document.getElementById('prescDayCourseBtns');
+  if(all.length>1){
+    selectorWrap.style.display='flex';
+    if(prescDayCourseSelected!==null && !all.find(d=>d.colorIdx===prescDayCourseSelected)) prescDayCourseSelected=null;
+    btnsEl.innerHTML = [['null','全部顯示'], ...all.map(ds=>[String(ds.colorIdx), ds.label])].map(([val,lbl])=>{
+      const active = String(prescDayCourseSelected)===val;
+      const color = val==='null' ? '#4a7a6d' : DATE_COLORS[Number(val)%DATE_COLORS.length];
+      return `<button onclick="selectPrescDayCourse(${val})" style="padding:4px 12px;border-radius:20px;font-size:0.82rem;font-weight:600;cursor:pointer;border:1.5px solid ${color};background:${active?color:'transparent'};color:${active?'#fff':color};font-family:inherit">${lbl}</button>`;
+    }).join('');
+  } else {
+    selectorWrap.style.display='none';
+  }
+  const src = prescDayCourseSelected!==null ? all.filter(ds=>ds.colorIdx===prescDayCourseSelected) : all;
   if(!src.length){
     document.getElementById('prescday-course-bar-title').textContent  = '各課程參與人數（直條圖）';
     document.getElementById('prescday-course-line-title').textContent = '各課程參與人數（折線圖）';
@@ -1338,6 +1358,11 @@ function buildPrescDayCourseCharts(){
         tooltip:{callbacks:{label:c=>` ${c.dataset.label}：${c.parsed.y} 人`}}},
       scales:yScales}
   });
+}
+
+function selectPrescDayCourse(val){
+  prescDayCourseSelected = val===null ? null : Number(val);
+  buildPrescDayCourseCharts();
 }
 
 function removePrescDayDataset(i){
